@@ -1,10 +1,27 @@
 # logc
 
+> One command to find, search, and follow local logs.
+
+```bash
+brew install logc
+```
+
+> Homebrew installation is under construction. Until the formula is published, install from source with `go install github.com/zchensh/logc@latest`.
+
+![12-second terminal demonstration of logc searching and following an API log](assets/logc-demo.gif)
+
+```bash
+logc api 'timeout|reset' --since 30m -f
+```
+
+| Before | After |
+| --- | --- |
+| `find` + `grep` + `zgrep` + `tail` | `logc` |
+| Remember paths, rotated files, and shell pipelines. | Name the service and follow the signal. |
+
 `logc` is a small SRE-oriented CLI that makes local logs feel like one interface instead of a collection of `find`, `tail`, `grep`, `zgrep`, `journalctl`, `lsof`, and `/proc` tricks.
 
-The design rule is simple:
-
-> Remember `logc`, not log paths and command pipelines.
+**[Download a release](https://github.com/zchensh/logc/releases)** · **[Fork and contribute](https://github.com/zchensh/logc/fork)** · **[Read the docs](#natural-cli)**
 
 ## Natural CLI
 
