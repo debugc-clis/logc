@@ -1,3 +1,3 @@
-module github.com/YOUR_GITHUB_USER/logg
+module github.com/zchensh/logg
 
 go 1.22
