@@ -34,7 +34,7 @@ logc api 'timeout|reset' --since 30m -f
 ## Quick Start
 
 ```bash
-# View a one-time snapshot of recent application logs.
+# Discover and follow recent application logs.
 logc
 
 # Follow a named source from ~/.logc.conf.
@@ -44,7 +44,7 @@ logc api
 logc api 'timeout|reset' --since 30m -f
 ```
 
-`logc` searches `/var/log`, `/opt/var/log`, and `/opt/log` by default. It considers files modified in the last 24 hours, shows up to 20 files and 10 lines per file, applies configured `ignore_line` filters, then exits. Passing a target, such as `logc api`, enables follow mode by default.
+`logc` searches `/var/log`, `/opt/var/log`, and `/opt/log` by default. It considers files modified in the last 24 hours, shows up to 20 files and 10 initial lines per file, then follows those files for new lines. It applies configured `ignore_line` filters throughout.
 
 ## Common Workflows
 

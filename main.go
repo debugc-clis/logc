@@ -19,7 +19,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `logc — one command for local logs
 
 USAGE
-  logc                         Show the latest application logs
+  logc                         Discover and follow the latest application logs
   logc TARGET                  Follow a log source (name, path, dir, glob, @process, @PID, :port)
   logc TARGET REGEX            Search that source (regex; searches recent rotated logs too)
   logc REGEX                   Search all default application logs
@@ -45,7 +45,6 @@ EXAMPLES
 
 SMALL SET OF OPTIONAL FLAGS
   -f                  Keep following after a search
-  --no-follow         Print once instead of following a source
   --since DURATION    Search/view recent time, e.g. 10m, 2h, 7d, today
   -C N                Show N context lines around a match
   -i                  Case-insensitive regex
@@ -71,7 +70,6 @@ CONFIG
 type cliOptions struct {
 	FollowSet   bool
 	Follow      bool
-	NoFollow    bool
 	SinceRaw    string
 	Context     int
 	IgnoreCase  bool
@@ -98,8 +96,6 @@ func parseCLI(args []string, cfg Config) (cliOptions, error) {
 		switch a {
 		case "-f", "--follow":
 			o.FollowSet, o.Follow = true, true
-		case "--no-follow":
-			o.NoFollow = true
 		case "--since":
 			v, err := next()
 			if err != nil {
@@ -267,9 +263,6 @@ func realMain() int {
 	if resolved.JournalUnit != "" {
 		searchMode := q.Regex != nil || !q.Since.IsZero()
 		follow := !searchMode || opts.Follow
-		if opts.NoFollow {
-			follow = false
-		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		var runErr error
@@ -300,7 +293,7 @@ func realMain() int {
 		if q.Regex != nil {
 			out.infof("%d matching lines", matches)
 		}
-		if !opts.Follow || opts.NoFollow {
+		if !opts.Follow {
 			return 0
 		}
 		activePaths := nonHistorical(paths)
@@ -317,13 +310,7 @@ func realMain() int {
 		return 0
 	}
 
-	follow := len(opts.Positionals) > 0
-	if opts.FollowSet {
-		follow = opts.Follow
-	}
-	if opts.NoFollow {
-		follow = false
-	}
+	follow := shouldFollow(opts)
 	if !follow {
 		showSnapshot(paths, cfg.Lines, q, out)
 		return 0
@@ -338,6 +325,10 @@ func realMain() int {
 	f := newFollower(cfg, patterns, excludes, out, q, false)
 	f.run(ctx)
 	return 0
+}
+
+func shouldFollow(opts cliOptions) bool {
+	return !opts.FollowSet || opts.Follow
 }
 
 func interpretPositionals(cfg Config, pos []string, explicitMatch string, includeHistory bool, since time.Time) (ResolvedTarget, string, error) {
