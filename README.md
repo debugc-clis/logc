@@ -65,6 +65,77 @@ Default roots:
 
 Use `logg ls` to see discovered local sources and `logg where api` to see exactly what a selector resolves to.
 
+### Default machine snapshot
+
+Running plain `logg` prints a clean, one-time snapshot; it does not continuously follow logs. With the default configuration, it:
+
+- searches `/var/log`, `/opt/var/log`, and `/opt/log`
+- excludes configured system-log paths such as `syslog`, `messages`, `kern.log`, `auth.log`, and `dmesg`
+- considers files modified within the last 24 hours, selects at most 20 files, and prints the latest 10 lines from each
+- prints a full-path block per file, applies `ignore_line` filters, and exits
+- highlights ERROR/WARN/DEBUG lines only when stdout is a color-capable terminal
+
+For example, imagine the following recent application logs:
+
+```text
+/opt/log/payment/api.log
+/opt/log/payment/worker.log
+/opt/var/log/nginx/access.log
+
+/var/log/syslog        <-- excluded system log
+/var/log/auth.log      <-- excluded system log
+```
+
+If `/opt/log/payment/api.log` contains 12 lines, the default `lines=10` omits its first two lines. A `logg` invocation would look approximately like this (ANSI colors omitted):
+
+```text
+$ logg
+
+/opt/log/payment/api.log [13:22:18]
+  2026-08-08 13:18:05 INFO  listening on :8080
+  2026-08-08 13:18:14 INFO  request_id=req-100 POST /payments
+  2026-08-08 13:18:14 INFO  request_id=req-100 payment authorized
+  2026-08-08 13:18:29 INFO  request_id=req-101 POST /payments
+  2026-08-08 13:18:30 WARN  request_id=req-101 stripe latency=1820ms
+  2026-08-08 13:18:31 INFO  request_id=req-101 retrying attempt=1
+  2026-08-08 13:18:32 ERROR request_id=req-101 upstream timeout
+  2026-08-08 13:18:33 INFO  request_id=req-101 retrying attempt=2
+  2026-08-08 13:18:34 INFO  request_id=req-101 payment completed
+  2026-08-08 13:20:02 INFO  request_id=req-102 GET /payments/123 200
+
+/opt/log/payment/worker.log [13:22:18]
+  2026-08-08 13:19:01 INFO  worker started
+  2026-08-08 13:19:03 INFO  job=invoice-882 picked_up
+  2026-08-08 13:19:04 INFO  job=invoice-882 sending email
+  2026-08-08 13:19:05 INFO  job=invoice-882 completed
+  2026-08-08 13:20:41 WARN  queue_depth=842 threshold=800
+
+/opt/var/log/nginx/access.log [13:22:18]
+  10.0.2.14 - GET /api/payments 200 42ms
+  10.0.2.18 - POST /api/payments 201 218ms
+  10.0.2.31 - GET /health 200 2ms
+  10.0.2.14 - GET /api/invoices 500 81ms
+```
+
+`/var/log/syslog` and `/var/log/auth.log` do not appear. The header time (`[13:22:18]`) is the time `logg` rendered the block, not the file modification or log-event time.
+
+With these filters in `~/.logg.conf`:
+
+```ini
+ignore_line=.*GET /health.*
+ignore_line=.*GET /metrics.*
+```
+
+the health-check line is removed from the snapshot. In short:
+
+```text
+logg                 Show a one-time overview of recent application activity.
+logg payment         Show payment logs and keep watching them.
+logg payment ERROR   Find errors in payment logs.
+```
+
+> Future improvement: the default snapshot can prioritize the 5–10 most active or relevant files and include compact activity metadata, instead of potentially displaying 20 files × 10 lines. This is not implemented yet.
+
 ### Smart selectors
 
 A target can be:
