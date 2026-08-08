@@ -261,6 +261,12 @@ exclude=/var/log/messages*
 exclude=/var/log/kern.log*
 exclude=/srv/**/debug*.log
 
+# Linux loads only common debugging-oriented system-log exclusions automatically.
+# User, cron, package-manager, and installer logs are not excluded by default.
+# Add exclusions, or remove an exact built-in pattern with !.
+# exclude=!/var/log/syslog*
+# exclude=/srv/platform/**
+
 ignore_line=.*GET /health.*
 
 # Simple named source

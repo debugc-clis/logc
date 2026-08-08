@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,19 +28,13 @@ type Config struct {
 }
 
 func defaultConfig() Config {
+	return defaultConfigForPlatform(runtime.GOOS, readOSRelease())
+}
+
+func defaultConfigForPlatform(goos, osRelease string) Config {
 	return Config{
 		DefaultLogDirs: []string{"/var/log", "/opt/var/log", "/opt/log"},
-		Excludes: []string{
-			"/var/log/journal/**", "/var/log/private/**", "/var/log/audit/**",
-			"/var/log/apt/**", "/var/log/dnf/**", "/var/log/installer/**",
-			"/var/log/unattended-upgrades/**", "/var/log/yum.log*", "/var/log/dpkg.log*",
-			"/var/log/alternatives.log*", "/var/log/cloud-init*", "/var/log/cron*",
-			"/var/log/daemon.log*", "/var/log/mail.log*", "/var/log/maillog*",
-			"/var/log/user.log*", "/var/log/ufw.log*", "/var/log/syslog*",
-			"/var/log/messages*", "/var/log/kern.log*", "/var/log/auth.log*",
-			"/var/log/secure*", "/var/log/boot.log*", "/var/log/dmesg*",
-			"/var/log/wtmp*", "/var/log/btmp*", "/var/log/lastlog*", "/var/log/faillog*",
-		},
+		Excludes:       systemLogExcludes(goos, osRelease),
 		Groups:         map[string][]string{},
 		Lines:          10,
 		MaxFiles:       20,
@@ -50,6 +45,79 @@ func defaultConfig() Config {
 		Recent:         24 * time.Hour,
 		Color:          true,
 	}
+}
+
+func readOSRelease() string {
+	if runtime.GOOS != "linux" {
+		return ""
+	}
+	b, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func systemLogExcludes(goos, osRelease string) []string {
+	common := []string{
+		"/var/log/journal/**", "/var/log/audit/**",
+	}
+	if goos != "linux" {
+		return common
+	}
+
+	distros := osReleaseIDs(osRelease)
+	debian := []string{
+		"/var/log/daemon.log*", "/var/log/syslog*", "/var/log/kern.log*", "/var/log/auth.log*",
+		"/var/log/boot.log*", "/var/log/dmesg*",
+	}
+	rhel := []string{
+		"/var/log/messages*", "/var/log/secure*", "/var/log/boot.log*", "/var/log/dmesg*",
+	}
+	suse := []string{
+		"/var/log/messages*", "/var/log/warn*", "/var/log/localmessages*", "/var/log/boot.msg*",
+		"/var/log/firewall*",
+	}
+	arch := []string{"/var/log/Xorg.*.log*"}
+	alpine := []string{"/var/log/messages*", "/var/log/warn*"}
+	gentoo := []string{"/var/log/messages*", "/var/log/emerge.log*"}
+
+	var selected []string
+	switch {
+	case distros["debian"] || distros["ubuntu"] || distros["linuxmint"] || distros["raspbian"]:
+		selected = debian
+	case distros["rhel"] || distros["centos"] || distros["fedora"] || distros["rocky"] || distros["almalinux"] || distros["amzn"]:
+		selected = rhel
+	case distros["sles"] || distros["opensuse"] || distros["opensuse-leap"] || distros["opensuse-tumbleweed"]:
+		selected = suse
+	case distros["arch"] || distros["manjaro"]:
+		selected = arch
+	case distros["alpine"]:
+		selected = alpine
+	case distros["gentoo"]:
+		selected = gentoo
+	default:
+		selected = append(append(append(append(append([]string{}, debian...), rhel...), suse...), arch...), alpine...)
+	}
+	for _, pattern := range selected {
+		common = appendUnique(common, pattern)
+	}
+	return common
+}
+
+func osReleaseIDs(osRelease string) map[string]bool {
+	ids := map[string]bool{}
+	for _, line := range strings.Split(osRelease, "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok || (key != "ID" && key != "ID_LIKE") {
+			continue
+		}
+		value = strings.Trim(strings.TrimSpace(value), "\"")
+		for _, id := range strings.Fields(strings.ToLower(value)) {
+			ids[id] = true
+		}
+	}
+	return ids
 }
 
 func configPath() string {
@@ -201,9 +269,11 @@ default_log_dir=/var/log
 default_log_dir=/opt/var/log
 default_log_dir=/opt/log
 
+# logg loads built-in system-log exclusions for the detected Linux distribution.
+# Add exclude= rules here, or prefix an exact built-in pattern with ! to re-include it.
+# Run logg config show to inspect the active built-in patterns.
 # OS logs stay out of the normal application-log view.
 exclude=/var/log/journal/**
-exclude=/var/log/private/**
 exclude=/var/log/audit/**
 exclude=/var/log/syslog*
 exclude=/var/log/messages*
