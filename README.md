@@ -8,7 +8,7 @@ brew install logc
 
 > Homebrew installation is under construction. Until the formula is published, install from source with `go install github.com/zchensh/logc@latest`.
 
-![12-second terminal demonstration of logc searching and following an API log](assets/logc-demo.gif)
+<img src="assets/logc-demo.jpg" alt="logc searches and follows matching API log lines" width="480" />
 
 ```bash
 logc api 'timeout|reset' --since 30m -f
