@@ -192,3 +192,7 @@ logc is open source and free to use. Fork the repository, build the feature you 
 ## Scope
 
 logc focuses on local logs and SRE ergonomics. It does not send logs to a remote service or perform AI analysis. Its source resolution and filtering pipeline is designed to support future analyzers without reimplementing discovery and command composition.
+
+## AI and Liability Notice
+
+Parts of this project were generated or assisted by AI and are provided as-is. To the maximum extent permitted by law, the author and contributors are not liable for any results, damages, losses, or other consequences arising from use of this software. Review and test it before using it in production.
