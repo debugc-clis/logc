@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>logc: SRE Log CLI for Finding, Searching & Following Logs</title>
+  <meta name="description" content="logc is a free, open-source SRE CLI for discovering, searching, and following local application and system logs on Linux and macOS." />
+  <meta name="author" content="logc contributors" />
+  <meta name="application-name" content="logc" />
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1" />
+  <link rel="canonical" href="https://logc.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="logc" />
+  <meta property="og:title" content="logc: One command for local logs" />
+  <meta property="og:description" content="Find, search, and follow logs without remembering paths or chaining shell commands." />
+  <meta property="og:url" content="https://logc.com/" />
+  <meta property="og:locale" content="en_US" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="logc: One command for local logs" />
+  <meta name="twitter:description" content="A free, open-source SRE CLI for discovering, searching, and following local logs." />
+  <meta name="theme-color" content="#07110f" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "logc",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS",
+    "description": "A free, open-source command-line tool for discovering, searching, and following local application and system logs.",
+    "url": "https://logc.com/",
+    "downloadUrl": "https://github.com/zchensh/logc/releases",
+    "codeRepository": "https://github.com/zchensh/logc",
+    "license": "https://github.com/zchensh/logc/blob/main/LICENSE",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+  <style>
+    :root{
+      --bg:#050908;
+      --bg-2:#07110f;
+      --panel:#09110f;
+      --panel-2:#0c1513;
+      --line:rgba(150,255,230,.13);
+      --line-strong:rgba(150,255,230,.25);
+      --text:#eef7f4;
+      --muted:#9caaa6;
+      --teal:#25e5c4;
+      --teal-2:#48ffd7;
+      --green:#57ef70;
+      --yellow:#f0c95a;
+      --red:#ff645f;
+      --shadow:0 20px 70px rgba(0,0,0,.45);
+      --radius:18px;
+      --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+      --sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    }
+
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      color:var(--text);
+      font-family:var(--sans);
+      background:
+        radial-gradient(circle at 50% 9%, rgba(31,229,196,.09), transparent 22rem),
+        radial-gradient(circle at 90% 32%, rgba(60,255,210,.04), transparent 20rem),
+        linear-gradient(rgba(26,255,210,.024) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26,255,210,.024) 1px, transparent 1px),
+        var(--bg);
+      background-size:auto,auto,42px 42px,42px 42px,auto;
+      line-height:1.55;
+    }
+    body::before{
+      content:"";
+      position:fixed; inset:0; pointer-events:none; z-index:20;
+      background:linear-gradient(to bottom,rgba(255,255,255,.012),transparent 1px);
+      background-size:100% 5px;
+      opacity:.2;
+      mix-blend-mode:screen;
+    }
+    a{color:inherit;text-decoration:none}
+    button{font:inherit}
+    .wrap{width:min(1180px,calc(100% - 40px));margin:auto}
+    .muted{color:var(--muted)}
+    .teal{color:var(--teal)}
+    .mono{font-family:var(--mono)}
+    .eyebrow{
+      font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+      color:var(--teal); font-weight:800;
+    }
+
+    /* nav */
+    .nav{
+      position:sticky;top:0;z-index:30;
+      background:rgba(4,8,7,.78);
+      backdrop-filter:blur(18px);
+      border-bottom:1px solid var(--line);
+    }
+    .nav-inner{height:72px;display:flex;align-items:center;gap:28px}
+    .brand{
+      display:inline-flex;align-items:center;gap:10px;
+      font:800 27px/1 var(--mono); color:var(--teal);
+      letter-spacing:-.05em; margin-right:auto;
+    }
+    .brand-mark{font-size:22px;color:var(--teal-2)}
+    .nav-links{display:flex;gap:26px;color:#c8d1ce;font-size:14px}
+    .nav-links a:hover,.small-link:hover{color:var(--teal)}
+    .nav-actions{display:flex;align-items:center;gap:15px}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:9px;
+      border:1px solid var(--line-strong); border-radius:10px;
+      padding:11px 17px; font-size:14px; font-weight:700;
+      background:rgba(255,255,255,.025); color:#e8f7f3;
+      transition:.18s ease; cursor:pointer;
+    }
+    .btn:hover{border-color:rgba(72,255,215,.6);transform:translateY(-1px)}
+    .btn.primary{
+      color:#03100d;background:linear-gradient(135deg,var(--teal-2),#27d7be);
+      border-color:transparent; box-shadow:0 7px 28px rgba(37,229,196,.2);
+    }
+    .btn.outline{border-color:rgba(37,229,196,.5);color:var(--teal-2);background:rgba(37,229,196,.035)}
+    .small-link{font-size:14px;color:#cbd5d2}
+
+    /* hero */
+    .hero{padding:72px 0 34px}
+    .hero-grid{display:grid;grid-template-columns:.78fr 1.22fr;gap:56px;align-items:center}
+    h1{
+      font-size:clamp(48px,7vw,79px);
+      line-height:.96;letter-spacing:-.055em;margin:0 0 24px;font-weight:820;
+    }
+    h1 span{display:block;color:var(--teal)}
+    .hero-copy p{
+      color:#c4cfcb; font-size:18px; max-width:590px; margin:0 0 28px;
+    }
+    .hero-actions{display:flex;gap:12px;flex-wrap:wrap}
+    .trust{margin-top:24px;display:flex;gap:17px;flex-wrap:wrap;color:#8fa09a;font-size:12px}
+    .trust span::before{content:"•";color:var(--teal);margin-right:7px}
+    .trust span:first-child::before{content:"◌"}
+
+    /* terminal */
+    .terminal{
+      background:linear-gradient(180deg,#0a100f,#060a09);
+      border:1px solid rgba(183,235,223,.18);
+      border-radius:15px;overflow:hidden;box-shadow:var(--shadow);
+    }
+    .terminal-head{
+      height:39px;display:flex;align-items:center;gap:7px;padding:0 13px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      background:linear-gradient(#171e1c,#101614);
+      color:#88918e;font-size:12px;
+    }
+    .dot{width:10px;height:10px;border-radius:50%}
+    .dot.r{background:#ff625f}.dot.y{background:#f6c64f}.dot.g{background:#36c85f}
+    .terminal-title{margin-left:auto;margin-right:auto;transform:translateX(-25px)}
+    .terminal-body{
+      font:12.5px/1.55 var(--mono);padding:20px 21px 17px;min-height:370px;
+      overflow:auto; color:#bfcac6;
+    }
+    .terminal-body pre,.mini-terminal pre,.beforeafter pre{margin:0;white-space:pre-wrap}
+    .prompt{color:#9df3df}.cmd{color:#edf7f4}.path{color:var(--teal)}.info{color:#79bfff}
+    .warn{color:var(--yellow)}.err{color:var(--red);font-weight:700}.ok{color:var(--green)}
+    .dim{color:#73827e}
+    .statusline{
+      display:flex;justify-content:space-between;gap:18px;padding-top:12px;margin-top:13px;
+      border-top:1px solid rgba(255,255,255,.09);font-size:11.5px;color:#8f9c98;
+    }
+
+    /* shared sections */
+    section{padding:42px 0}
+    .section-title{
+      font-size:31px;letter-spacing:-.03em;margin:0 0 22px;font-weight:780;
+    }
+    .section-title span{color:var(--teal)}
+    .section-intro{color:var(--muted);max-width:720px;margin:-12px 0 26px}
+
+    /* before after */
+    .beforeafter{
+      margin-top:12px;padding:21px;
+      border:1px solid var(--line);border-radius:var(--radius);
+      background:linear-gradient(180deg,rgba(15,24,21,.92),rgba(8,13,12,.9));
+      box-shadow:0 14px 50px rgba(0,0,0,.2);
+    }
+    .ba-grid{display:grid;grid-template-columns:1fr 58px 1fr;align-items:center;gap:16px}
+    .ba-title{font-size:17px;font-weight:800;margin-bottom:9px}
+    .ba-card{border:1px solid;border-radius:10px;padding:17px;background:#080d0c;font:13px/1.6 var(--mono)}
+    .ba-card.before{border-color:rgba(255,100,95,.55);color:#ff817d}
+    .ba-card.after{border-color:rgba(87,239,112,.55);color:#7cff8f;min-height:127px;display:flex;align-items:center}
+    .arrow{text-align:center;font-size:34px;color:#91a19c}
+    .ba-caption{text-align:center;color:#9ba9a5;font-size:13px;margin-top:12px}
+
+    /* features */
+    .feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .card{
+      position:relative;overflow:hidden;
+      border:1px solid var(--line);border-radius:14px;
+      background:linear-gradient(145deg,rgba(12,21,19,.9),rgba(6,11,10,.92));
+    }
+    .feature{padding:22px;display:grid;grid-template-columns:44px 1fr;gap:14px;min-height:132px}
+    .icon{
+      width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+      color:var(--teal);border:1px solid rgba(37,229,196,.19);background:rgba(37,229,196,.035)
+    }
+    .icon svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8}
+    .feature h3{margin:0 0 4px;color:var(--teal);font-size:16px}
+    .feature p{margin:0;color:#aebbb7;font-size:13.5px;line-height:1.48}
+
+    /* examples */
+    .examples-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .example-card{padding:12px;min-width:0}
+    .example-label{display:flex;align-items:center;gap:9px;font-weight:800;font-size:13px;margin:0 0 11px}
+    .badge{
+      flex:0 0 auto;width:23px;height:23px;border-radius:50%;
+      display:grid;place-items:center;background:var(--teal);color:#04201a;font:800 11px/1 var(--mono)
+    }
+    .mini-terminal{
+      border:1px solid rgba(183,235,223,.17);border-radius:10px;
+      background:#050908;padding:12px;height:273px;overflow:hidden;
+      font:10.6px/1.5 var(--mono);color:#bac7c3;
+    }
+
+    /* productivity */
+    .why-grid{display:grid;grid-template-columns:.75fr 1.25fr;gap:30px;align-items:center}
+    .checks{display:grid;gap:7px;color:#d0dad7;font-size:14px}
+    .checks span::before{content:"✓";color:var(--teal);font-weight:900;margin-right:9px}
+    .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .stat{padding:19px;text-align:center;min-height:176px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .stat .icon{margin-bottom:12px}
+    .stat strong{font-size:15px;line-height:1.25}
+    .stat p{margin:6px 0 0;font-size:12.5px;color:var(--muted)}
+
+    /* oss */
+    .oss{
+      padding:25px;border:1px solid rgba(37,229,196,.2);border-radius:var(--radius);
+      background:
+        radial-gradient(circle at 15% 40%,rgba(37,229,196,.08),transparent 23rem),
+        linear-gradient(145deg,rgba(8,20,17,.95),rgba(6,10,9,.92));
+    }
+    .oss-grid{display:grid;grid-template-columns:1fr auto;gap:30px;align-items:center}
+    .oss h2{font-size:28px;margin:0 0 7px}.oss h2 span{color:var(--teal)}
+    .oss p{color:#afbbb7;max-width:650px;margin:0}
+    .oss-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+    /* resources */
+    .resource-box{padding:25px;border:1px solid var(--line);border-radius:var(--radius);background:rgba(7,13,12,.84)}
+    .resource-links{display:flex;gap:11px;flex-wrap:wrap}
+    .resource-links a{
+      border:1px solid var(--line-strong);border-radius:8px;padding:8px 13px;
+      color:var(--teal);font:12px var(--mono);background:rgba(37,229,196,.02)
+    }
+    .resource-links a:hover{border-color:var(--teal);background:rgba(37,229,196,.06)}
+
+    /* install */
+    .install-card{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:21px;margin-top:15px}
+    .install-command{
+      display:flex;align-items:center;gap:12px;border:1px solid var(--line);
+      background:#050908;border-radius:10px;padding:13px 14px;font:13px var(--mono);min-width:min(100%,460px)
+    }
+    .install-command code{overflow:auto;white-space:nowrap;color:#d6e2de}
+    .copy{
+      margin-left:auto;border:0;background:transparent;color:var(--teal);
+      cursor:pointer;font:700 12px var(--mono)
+    }
+
+    /* footer */
+    footer{border-top:1px solid var(--line);padding:32px 0 40px;margin-top:25px}
+    .footer-grid{display:grid;grid-template-columns:1fr auto;gap:25px;align-items:center}
+    .footer-links{display:flex;gap:24px;color:#9eaaa6;font-size:13px;flex-wrap:wrap;justify-content:flex-end}
+    .footer-note{font-size:12px;color:#6f7c78;margin-top:9px}
+    .ascii{font:9px/1.08 var(--mono);color:rgba(37,229,196,.25);white-space:pre;text-align:right;margin-top:11px}
+
+    /* responsive */
+    @media (max-width:980px){
+      .nav-links{display:none}
+      .hero-grid,.why-grid,.oss-grid{grid-template-columns:1fr}
+      .hero{padding-top:48px}
+      .feature-grid{grid-template-columns:repeat(2,1fr)}
+      .examples-grid{grid-template-columns:repeat(2,1fr)}
+      .stat-grid{grid-template-columns:repeat(2,1fr)}
+      .oss-actions{justify-content:flex-start}
+    }
+    @media (max-width:650px){
+      .wrap{width:min(100% - 24px,1180px)}
+      .nav-inner{height:62px;gap:12px}
+      .small-link{display:none}
+      .btn{padding:10px 13px}
+      .brand{font-size:24px}
+      h1{font-size:52px}
+      .hero-grid{gap:32px}
+      .terminal-body{font-size:11px;padding:16px}
+      .ba-grid{grid-template-columns:1fr}.arrow{transform:rotate(90deg)}
+      .feature-grid,.examples-grid,.stat-grid{grid-template-columns:1fr}
+      .feature{min-height:auto}
+      .mini-terminal{height:auto;min-height:210px}
+      .install-card,.footer-grid{grid-template-columns:1fr}
+      .footer-links{justify-content:flex-start}
+      .nav-actions .btn.outline{display:none}
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top" aria-label="logc home"><span class="brand-mark">&gt;_</span>logc</a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#examples">Examples</a>
+        <a href="#open-source">Open Source</a>
+        <a href="#resources">Resources</a>
+        <a href="#github">GitHub</a>
+      </div>
+      <div class="nav-actions">
+        <a class="btn outline" href="#install">Get Started</a>
+        <a class="small-link" href="https://github.com/zchensh/logc" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <div class="eyebrow">SRE-native log CLI</div>
+            <h1>One command <span>for logs.</span></h1>
+            <p>Find, search, and follow logs without remembering paths or chaining <span class="mono">tail</span>, <span class="mono">grep</span>, <span class="mono">find</span>, and <span class="mono">journalctl</span>. Built for SREs, always free, and open source.</p>
+            <div class="hero-actions">
+              <a class="btn primary" href="#install">&gt;_ Install logc</a>
+              <a class="btn" href="#examples">Read the Docs</a>
+            </div>
+            <div class="trust">
+              <span>Open source</span><span>Always free</span><span>CLI-first</span><span>Linux &amp; macOS</span>
+            </div>
+          </div>
+
+          <div class="terminal" aria-label="Example logc terminal output">
+            <div class="terminal-head">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <span class="terminal-title">terminal</span>
+            </div>
+            <div class="terminal-body">
+<pre><span class="prompt">$</span> <span class="cmd">logc api 'timeout|reset' --since 30m -f</span>
+
+<span class="path">/srv/api/log/app.log</span> <span class="dim">(3 matches)</span>
+2026-08-08 13:47:32  <span class="info">INFO </span> [http]  request_id=8f1a9  GET /v1/users 200 34ms
+2026-08-08 13:48:03  <span class="warn">WARN </span> [db]    slow query detected 512ms
+2026-08-08 13:49:11  <span class="err">ERROR</span> [http]  request_id=8f1aa  upstream timeout after 30s
+2026-08-08 13:49:12  <span class="info">INFO </span> [retry] retrying request_id=8f1aa attempt=1
+<span class="ok">-- following -- (press Ctrl+C to stop)</span>
+
+<span class="path">/srv/api/log/app.log.1.gz</span> <span class="dim">(2 matches)</span>
+2026-08-08 13:35:21  <span class="warn">WARN </span> [cache] connection reset by peer
+2026-08-08 13:36:45  <span class="err">ERROR</span> [http]  request_id=8f199 upstream timeout after 30s
+
+<span class="path">/var/log/journal/3b8f.../system.journal</span> <span class="dim">(1 match)</span>
+2026-08-08 13:42:02  <span class="warn">WARN </span> systemd[1]: api.service: Main process exited,
+                                   code=exited, status=1/FAILURE</pre>
+              <div class="statusline">
+                <span>3 files · 6 matches · since 30m · following</span>
+                <span class="ok">(live) ●</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="beforeafter">
+          <div class="ba-grid">
+            <div>
+              <div class="ba-title" style="color:var(--red)">Before</div>
+              <div class="ba-card before">
+<pre>$ find /srv -name '*.log'
+$ grep -Ei 'timeout|reset' ...
+$ zgrep -Ei 'timeout|reset' *.log.gz
+$ tail -f app.log | grep ERROR</pre>
+              </div>
+            </div>
+            <div class="arrow">→</div>
+            <div>
+              <div class="ba-title" style="color:var(--green)">After</div>
+              <div class="ba-card after">
+<pre>$ logc api 'timeout|reset' --since 30m -f</pre>
+              </div>
+            </div>
+          </div>
+          <div class="ba-caption">Less path-hunting. Less command memorization. Faster debugging.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <h2 class="section-title">Built around the way <span>SREs debug</span></h2>
+        <div class="feature-grid">
+          <article class="card feature">
+            <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="2"/></svg></div>
+            <div><h3>Smart discovery</h3><p>Find logs by service name, path, process, PID, or port.</p></div>
+          </article>
+          <article class="card feature">
+            <div class="icon"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></div>
+            <div><h3>Search built in</h3><p>Regex search without shelling out to grep or zgrep.</p></div>
+          </article>
+          <article class="card feature">
+            <div class="icon"><svg viewBox="0 0 24 24"><path d="M2 13h4l2-7 4 13 3-9 2 3h5"/></svg></div>
+            <div><h3>Follow live</h3><p>Search history, then continue following new matching lines.</p></div>
+          </article>
+          <article class="card feature">
+            <div class="icon"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="5" rx="1"/><rect x="4" y="10" width="16" height="5" rx="1"/><rect x="4" y="17" width="16" height="4" rx="1"/><path d="M7 5.5h.01M7 12.5h.01M7 19h.01"/></svg></div>
+            <div><h3>System aware</h3><p>Works with files, journald, and common Linux log sources.</p></div>
+          </article>
+          <article class="card feature">
+            <div class="icon"><svg viewBox="0 0 24 24"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg></div>
+            <div><h3>Noise control</h3><p>Ignore health checks, dedupe spam, and keep hot logs from flooding the screen.</p></div>
+          </article>
+          <article class="card feature">
+            <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14c-2-1-3.2-2.8-3.2-4.7C4.8 6.9 7 5 9.6 5c1.7 0 3.1.8 4 2M16 10c2 1 3.2 2.8 3.2 4.7 0 2.4-2.2 4.3-4.8 4.3-1.7 0-3.1-.8-4-2"/></svg></div>
+            <div><h3>Open source forever</h3><p>Open development. Free to use, now and always.</p></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="examples">
+      <div class="wrap">
+        <h2 class="section-title">How <span>logc</span> works</h2>
+        <p class="section-intro">You remember the problem. logc finds the source, searches the history, and follows what matters.</p>
+
+        <div class="examples-grid">
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">1</span>See active app logs</div>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc
+
+<span class="path">/srv/api/log/app.log</span>
+14:21:01 <span class="info">INFO</span> server started
+14:21:05 <span class="info">INFO</span> listening on :8080
+14:21:09 <span class="info">INFO</span> health check OK
+
+<span class="path">/srv/worker/log/worker.log</span>
+14:20:58 <span class="info">INFO</span> job completed id=842
+14:21:02 <span class="info">INFO</span> pulled 10 tasks
+
+<span class="path">/var/log/nginx/access.log</span>
+14:21:03 <span class="info">INFO</span> 200 GET /health 1ms
+
+<span class="dim">3 files · latest lines</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">2</span>Search a service</div>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc payment ERROR
+
+<span class="path">/srv/payment/log/app.log</span>
+14:17:11 <span class="err">ERROR</span> charge failed
+request_id=9d2b1 code=42
+
+<span class="path">/srv/payment/log/app.log.1.gz</span>
+14:02:55 <span class="err">ERROR</span> upstream timeout
+after 30s
+request_id=9c8a0
+
+<span class="dim">2 files · 2 matches</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">3</span>Jump from port to logs</div>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc :8080
+
+:8080 → PID 21819 → payment-api
+      → <span class="path">/srv/payment/log/app.log</span>
+
+<span class="path">/srv/payment/log/app.log</span>
+14:21:17 <span class="info">INFO</span> GET /v1/orders 200
+14:21:18 <span class="err">ERROR</span> upstream timeout
+          after 30s
+14:21:19 <span class="info">INFO</span> retrying id=aa91
+
+<span class="dim">resolved automatically</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">4</span>Find process logs</div>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc @nginx
+
+Process: nginx (PID 1542)
+User: www-data
+Resolved sources:
+ • /var/log/nginx/access.log
+ • /var/log/nginx/error.log
+ • journald: _COMM=nginx
+
+<span class="path">/var/log/nginx/error.log</span>
+14:20:59 <span class="err">ERROR</span> connect() failed
+          (111: Connection refused)
+
+<span class="dim">3 sources · following</span></pre>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap why-grid">
+        <div>
+          <h2 class="section-title">Why <span>SREs like it</span></h2>
+          <div class="checks">
+            <span>Fewer commands to remember</span>
+            <span>Faster incident triage</span>
+            <span>Quicker request-id tracing</span>
+            <span>Easier debugging on unfamiliar machines</span>
+            <span>Better focus during oncall</span>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <article class="card stat"><div class="icon">⌨</div><strong>Less command switching</strong><p>Stay in flow.</p></article>
+          <article class="card stat"><div class="icon">ϟ</div><strong>Faster path discovery</strong><p>Find the right log instantly.</p></article>
+          <article class="card stat"><div class="icon">◎</div><strong>Cleaner incident workflow</strong><p>From signal to resolution.</p></article>
+          <article class="card stat"><div class="icon">⌁</div><strong>Better oncall ergonomics</strong><p>Reduce cognitive load.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="open-source">
+      <div class="wrap">
+        <div class="oss">
+          <div class="oss-grid">
+            <div>
+              <h2><span>Open source.</span> Always free.</h2>
+              <p>logc is built in the open and intended to remain free for every engineer, SRE, and ops team. Contributions, issues, and ideas are welcome.</p>
+            </div>
+            <div class="oss-actions" id="github">
+              <a class="btn primary" href="https://github.com/zchensh/logc" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
+              <a class="btn" href="https://github.com/zchensh/logc/releases" target="_blank" rel="noopener noreferrer">Releases</a>
+              <a class="btn" href="https://github.com/zchensh/logc/issues" target="_blank" rel="noopener noreferrer">Issues</a>
+            </div>
+          </div>
+        </div>
+
+        <div id="install" class="card install-card">
+          <div>
+            <div class="eyebrow">Install</div>
+            <strong>Keep installation boring.</strong>
+            <div class="muted" style="font-size:13px;margin-top:4px">Install the CLI and start exploring local application logs immediately.</div>
+          </div>
+          <div class="install-command">
+            <span class="prompt">$</span>
+            <code id="installText">brew install logc</code>
+            <button class="copy" type="button" onclick="copyInstall(this)">COPY</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="resources">
+      <div class="wrap">
+        <div class="resource-box">
+          <h2 class="section-title" style="margin-bottom:8px">Resources for <span>logging &amp; observability</span></h2>
+          <p class="section-intro">Useful foundations, standards, open-source tools, and commercial logging platforms.</p>
+          <div class="resource-links">
+            <a href="https://www.linuxfoundation.org/" target="_blank" rel="noopener noreferrer">linuxfoundation.org ↗</a>
+            <a href="https://opentelemetry.io/" target="_blank" rel="noopener noreferrer">opentelemetry.io ↗</a>
+            <a href="https://vector.dev/" target="_blank" rel="noopener noreferrer">vector.dev ↗</a>
+            <a href="https://www.rsyslog.com/" target="_blank" rel="noopener noreferrer">rsyslog.com ↗</a>
+            <a href="https://systemd.io/" target="_blank" rel="noopener noreferrer">systemd.io ↗</a>
+            <a href="https://www.splunk.com/" target="_blank" rel="noopener noreferrer">splunk.com ↗</a>
+            <a href="https://grafana.com/" target="_blank" rel="noopener noreferrer">grafana.com ↗</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-grid">
+      <div>
+        <a class="brand" href="#top"><span class="brand-mark">&gt;_</span>logc</a>
+        <div class="footer-note">Open-source log tooling for SREs.</div>
+        <div class="footer-note">© logc — open source and always free</div>
+      </div>
+      <div>
+        <div class="footer-links">
+          <a href="https://github.com/zchensh/logc" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://github.com/zchensh/logc#readme" target="_blank" rel="noopener noreferrer">Docs</a><a href="https://github.com/zchensh/logc/releases" target="_blank" rel="noopener noreferrer">Releases</a><a href="https://github.com/zchensh/logc/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a>
+        </div>
+        <div class="ascii" aria-hidden="true">01001100 01101111 01100111 01100011
+ /\/\  signal > noise  /\/\
+     logs → context → fix</div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function copyInstall(button){
+      const text = document.getElementById('installText').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const old = button.textContent;
+        button.textContent = 'COPIED';
+        setTimeout(() => button.textContent = old, 1400);
+      }).catch(() => {});
+    }
+  </script>
+</body>
+</html>
