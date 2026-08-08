@@ -8,7 +8,7 @@ brew install logc
 
 > Homebrew installation is under construction. Until the formula is published, install from source with `go install github.com/zchensh/logc@latest`.
 
-<img src="assets/logc-demo.jpg" alt="logc displays recent application logs from payment API, worker, and nginx files" width="800" />
+<img src="assets/logc-demo.jpg" alt="logc displays recent application logs from payment API, worker, and nginx files" width="480" />
 
 ```bash
 logc api 'timeout|reset' --since 30m -f
