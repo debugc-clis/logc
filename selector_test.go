@@ -53,8 +53,8 @@ func TestGroupHistoryExpandsRotatedSiblings(t *testing.T) {
 }
 
 func TestLikelyLogDoesNotMatchLoggConfig(t *testing.T) {
-	if likelyLog("/tmp/logg.conf") {
-		t.Fatal("logg.conf should not be treated as a log")
+	if likelyLog("/tmp/logc.conf") {
+		t.Fatal("logc.conf should not be treated as a log")
 	}
 	if !likelyLog("/tmp/app.log") {
 		t.Fatal("app.log should be a log")

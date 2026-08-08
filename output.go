@@ -73,8 +73,8 @@ func (p *printer) block(path string, lines []string, suffix string) {
 }
 
 func (p *printer) infof(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "logg: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "logc: "+format+"\n", args...)
 }
 func (p *printer) errorf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "logg: error: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "logc: error: "+format+"\n", args...)
 }

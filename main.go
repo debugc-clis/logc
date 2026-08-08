@@ -16,32 +16,32 @@ import (
 var version = "dev"
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `logg — one command for local logs
+	fmt.Fprintf(os.Stderr, `logc — one command for local logs
 
 USAGE
-  logg                         Show the latest application logs
-  logg TARGET                  Follow a log source (name, path, dir, glob, @process, @PID, :port)
-  logg TARGET REGEX            Search that source (regex; searches recent rotated logs too)
-  logg REGEX                   Search all default application logs
-  logg TARGET REGEX -f         Search existing logs, then keep following matching lines
-  logg system                  Follow operating-system logs
-  logg ls                      Discover available local log sources
-  logg where TARGET            Show what a target resolves to
+  logc                         Show the latest application logs
+  logc TARGET                  Follow a log source (name, path, dir, glob, @process, @PID, :port)
+  logc TARGET REGEX            Search that source (regex; searches recent rotated logs too)
+  logc REGEX                   Search all default application logs
+  logc TARGET REGEX -f         Search existing logs, then keep following matching lines
+  logc system                  Follow operating-system logs
+  logc ls                      Discover available local log sources
+  logc where TARGET            Show what a target resolves to
 
 EXAMPLES
-  logg api
-  logg api ERROR
-  logg api 'timeout|reset'
-  logg ERROR
-  logg api ERROR --since 30m
-  logg api ERROR -C 3
-  logg api ERROR -f
-  logg /srv/api/log
-  logg /srv/api/a.log /srv/worker/b.log
-  logg '/srv/**/logs/*.log'
-  logg @nginx
-  logg @12345
-  logg :8080
+  logc api
+  logc api ERROR
+  logc api 'timeout|reset'
+  logc ERROR
+  logc api ERROR --since 30m
+  logc api ERROR -C 3
+  logc api ERROR -f
+  logc /srv/api/log
+  logc /srv/api/a.log /srv/worker/b.log
+  logc '/srv/**/logs/*.log'
+  logc @nginx
+  logc @12345
+  logc :8080
 
 SMALL SET OF OPTIONAL FLAGS
   -f                  Keep following after a search
@@ -56,8 +56,8 @@ SMALL SET OF OPTIONAL FLAGS
   -m REGEX            Explicit match regex (normally just use the second positional argument)
 
 CONFIG
-  ~/.logg.conf
-  Override with LOGG_CONFIG=/path/to/logg.conf
+  ~/.logc.conf
+  Override with LOGC_CONFIG=/path/to/logc.conf
 
   Named sources can be configured as:
     group.api=/srv/api/log/*.log
@@ -200,7 +200,7 @@ func realMain() int {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "version", "--version", "-version":
-			fmt.Printf("logg %s (%s/%s)\n", version, runtime.GOOS, runtime.GOARCH)
+			fmt.Printf("logc %s (%s/%s)\n", version, runtime.GOOS, runtime.GOARCH)
 			return 0
 		case "help", "--help", "-h":
 			usage()
@@ -218,12 +218,12 @@ func realMain() int {
 
 	cfg, err := loadConfig()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "logg:", err)
+		fmt.Fprintln(os.Stderr, "logc:", err)
 		return 2
 	}
 	opts, err := parseCLI(os.Args[1:], cfg)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "logg:", err)
+		fmt.Fprintln(os.Stderr, "logc:", err)
 		return 2
 	}
 	cfg.Lines = opts.Lines
@@ -237,7 +237,7 @@ func realMain() int {
 		return 2
 	}
 
-	// First resolve only active logs so ordinary `logg api` never pulls rotated/.gz files.
+	// First resolve only active logs so ordinary `logc api` never pulls rotated/.gz files.
 	resolved, queryPattern, err := interpretPositionals(cfg, opts.Positionals, opts.Match, false, since)
 	if err != nil {
 		out.errorf("%v", err)
@@ -361,7 +361,7 @@ func interpretPositionals(cfg Config, pos []string, explicitMatch string, includ
 		return r, pos[0], err
 	}
 	// A search-looking token after one or more sources wins over fuzzy source discovery.
-	// This makes `logg api ERROR` unambiguously mean search, even if error.log exists.
+	// This makes `logc api ERROR` unambiguously mean search, even if error.log exists.
 	for i := 1; i < len(pos); i++ {
 		if looksLikeSearchExpression(pos[i]) {
 			r, consumed, err := resolveLeadingTargets(cfg, pos[:i], includeHistory)
@@ -458,7 +458,7 @@ func configCommand(args []string) int {
 	case "show":
 		cfg, err := loadConfig()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "logg:", err)
+			fmt.Fprintln(os.Stderr, "logc:", err)
 			return 1
 		}
 		printConfig(cfg)
@@ -466,13 +466,13 @@ func configCommand(args []string) int {
 	case "init":
 		force := len(args) > 1 && args[1] == "--force"
 		if err := writeDefaultConfig(force); err != nil {
-			fmt.Fprintln(os.Stderr, "logg:", err)
+			fmt.Fprintln(os.Stderr, "logc:", err)
 			return 1
 		}
 		fmt.Printf("created %s\n", configPath())
 		return 0
 	default:
-		fmt.Fprintln(os.Stderr, "logg: usage: logg config {init|path|show}")
+		fmt.Fprintln(os.Stderr, "logc: usage: logc config {init|path|show}")
 		return 2
 	}
 }
@@ -480,7 +480,7 @@ func configCommand(args []string) int {
 func systemCommand(args []string) int {
 	cfg, err := loadConfig()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "logg:", err)
+		fmt.Fprintln(os.Stderr, "logc:", err)
 		return 1
 	}
 	kernel := false
@@ -500,7 +500,7 @@ func systemCommand(args []string) int {
 			}
 			lines = n
 		default:
-			fmt.Fprintln(os.Stderr, "logg system: unknown option", args[i])
+			fmt.Fprintln(os.Stderr, "logc system: unknown option", args[i])
 			return 2
 		}
 	}
@@ -508,7 +508,7 @@ func systemCommand(args []string) int {
 	defer stop()
 	err = runSystemLogs(ctx, lines, kernel)
 	if err != nil && ctx.Err() == nil {
-		fmt.Fprintln(os.Stderr, "logg system:", err)
+		fmt.Fprintln(os.Stderr, "logc system:", err)
 		return 1
 	}
 	return 0
@@ -517,7 +517,7 @@ func systemCommand(args []string) int {
 func listCommand() int {
 	cfg, err := loadConfig()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "logg:", err)
+		fmt.Fprintln(os.Stderr, "logc:", err)
 		return 1
 	}
 	sources := listSources(cfg)
@@ -538,17 +538,17 @@ func listCommand() int {
 
 func whereCommand(args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "logg: usage: logg where TARGET")
+		fmt.Fprintln(os.Stderr, "logc: usage: logc where TARGET")
 		return 2
 	}
 	cfg, err := loadConfig()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "logg:", err)
+		fmt.Fprintln(os.Stderr, "logc:", err)
 		return 1
 	}
 	r, err := resolveTarget(cfg, args[0], true)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "logg:", err)
+		fmt.Fprintln(os.Stderr, "logc:", err)
 		return 1
 	}
 	if r.JournalUnit != "" {

@@ -8,12 +8,12 @@ import (
 
 func TestConfigGroupsAndIgnoreLines(t *testing.T) {
 	d := t.TempDir()
-	p := filepath.Join(d, "logg.conf")
+	p := filepath.Join(d, "logc.conf")
 	body := "group.api=/srv/api/*.log\n[group.worker]\npath=/srv/worker/*.log\nignore_line=.*health.*\n"
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("LOGG_CONFIG", p)
+	t.Setenv("LOGC_CONFIG", p)
 	cfg, err := loadConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -56,12 +56,12 @@ func TestSystemLogExcludesUseLinuxDistribution(t *testing.T) {
 
 func TestConfigCanOverrideBuiltInSystemLogExclusion(t *testing.T) {
 	d := t.TempDir()
-	p := filepath.Join(d, "logg.conf")
+	p := filepath.Join(d, "logc.conf")
 	body := "exclude=!/var/log/journal/**\nexclude=/srv/platform/**\n"
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("LOGG_CONFIG", p)
+	t.Setenv("LOGC_CONFIG", p)
 	cfg, err := loadConfig()
 	if err != nil {
 		t.Fatal(err)

@@ -121,14 +121,14 @@ func osReleaseIDs(osRelease string) map[string]bool {
 }
 
 func configPath() string {
-	if p := os.Getenv("LOGG_CONFIG"); p != "" {
+	if p := os.Getenv("LOGC_CONFIG"); p != "" {
 		return expandHome(p)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".logg.conf"
+		return ".logc.conf"
 	}
-	return filepath.Join(home, ".logg.conf")
+	return filepath.Join(home, ".logc.conf")
 }
 
 func loadConfig() (Config, error) {
@@ -262,16 +262,16 @@ func writeDefaultConfig(force bool) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	body := `# logg user configuration
-# Keep this small: logg is designed to discover logs automatically.
+	body := `# logc user configuration
+# Keep this small: logc is designed to discover logs automatically.
 
 default_log_dir=/var/log
 default_log_dir=/opt/var/log
 default_log_dir=/opt/log
 
-# logg loads built-in system-log exclusions for the detected Linux distribution.
+# logc loads built-in system-log exclusions for the detected Linux distribution.
 # Add exclude= rules here, or prefix an exact built-in pattern with ! to re-include it.
-# Run logg config show to inspect the active built-in patterns.
+# Run logc config show to inspect the active built-in patterns.
 # OS logs stay out of the normal application-log view.
 exclude=/var/log/journal/**
 exclude=/var/log/audit/**

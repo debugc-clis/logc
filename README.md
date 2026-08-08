@@ -1,50 +1,50 @@
-# logg
+# logc
 
-`logg` is a small SRE-oriented CLI that makes local logs feel like one interface instead of a collection of `find`, `tail`, `grep`, `zgrep`, `journalctl`, `lsof`, and `/proc` tricks.
+`logc` is a small SRE-oriented CLI that makes local logs feel like one interface instead of a collection of `find`, `tail`, `grep`, `zgrep`, `journalctl`, `lsof`, and `/proc` tricks.
 
 The design rule is simple:
 
-> Remember `logg`, not log paths and command pipelines.
+> Remember `logc`, not log paths and command pipelines.
 
 ## Natural CLI
 
 ```bash
 # latest application logs discovered from configured roots
-logg
+logc
 
 # follow a source by name
-logg api
+logc api
 
 # search a source (regex is a positional argument)
-logg api ERROR
-logg api 'timeout|reset|refused'
+logc api ERROR
+logc api 'timeout|reset|refused'
 
 # search all default application logs
-logg ERROR
-logg request_id=9f82ac
+logc ERROR
+logc request_id=9f82ac
 
 # search existing logs, then continue following matches
-logg api ERROR -f
+logc api ERROR -f
 
 # a few optional modifiers
-logg api ERROR --since 30m
-logg api ERROR -C 3
-logg api error -i
-logg api ERROR --dedup
+logc api ERROR --since 30m
+logc api ERROR -C 3
+logc api error -i
+logc api ERROR --dedup
 
 # direct paths, directories, globs, or multiple files
-logg /srv/api/log
-logg /srv/api/app.log /srv/worker/worker.log
-logg '/srv/**/logs/*.log'
+logc /srv/api/log
+logc /srv/api/app.log /srv/worker/worker.log
+logc '/srv/**/logs/*.log'
 
 # process/PID/port selectors on Linux
-logg @nginx
-logg @12345
-logg :8080
+logc @nginx
+logc @12345
+logc :8080
 
 # system logs stay separate
-logg system
-logg system --kernel
+logc system
+logc system --kernel
 ```
 
 `ERROR`, `errors`, `WARN`, and `warnings` are convenient severity searches. `errors` includes common fatal/panic/exception forms.
@@ -53,7 +53,7 @@ logg system --kernel
 
 ### Log discovery
 
-`logg` scans configured application-log roots, excludes common operating-system logs from the normal view, and ranks recent files by modification time.
+`logc` scans configured application-log roots, excludes common operating-system logs from the normal view, and ranks recent files by modification time.
 
 Default roots:
 
@@ -63,11 +63,11 @@ Default roots:
 /opt/log
 ```
 
-Use `logg ls` to see discovered local sources and `logg where api` to see exactly what a selector resolves to.
+Use `logc ls` to see discovered local sources and `logc where api` to see exactly what a selector resolves to.
 
 ### Default machine snapshot
 
-Running plain `logg` prints a clean, one-time snapshot; it does not continuously follow logs. With the default configuration, it:
+Running plain `logc` prints a clean, one-time snapshot; it does not continuously follow logs. With the default configuration, it:
 
 - searches `/var/log`, `/opt/var/log`, and `/opt/log`
 - excludes configured system-log paths such as `syslog`, `messages`, `kern.log`, `auth.log`, and `dmesg`
@@ -86,10 +86,10 @@ For example, imagine the following recent application logs:
 /var/log/auth.log      <-- excluded system log
 ```
 
-If `/opt/log/payment/api.log` contains 12 lines, the default `lines=10` omits its first two lines. A `logg` invocation would look approximately like this (ANSI colors omitted):
+If `/opt/log/payment/api.log` contains 12 lines, the default `lines=10` omits its first two lines. A `logc` invocation would look approximately like this (ANSI colors omitted):
 
 ```text
-$ logg
+$ logc
 
 /opt/log/payment/api.log [13:22:18]
   2026-08-08 13:18:05 INFO  listening on :8080
@@ -117,9 +117,9 @@ $ logg
   10.0.2.14 - GET /api/invoices 500 81ms
 ```
 
-`/var/log/syslog` and `/var/log/auth.log` do not appear. The header time (`[13:22:18]`) is the time `logg` rendered the block, not the file modification or log-event time.
+`/var/log/syslog` and `/var/log/auth.log` do not appear. The header time (`[13:22:18]`) is the time `logc` rendered the block, not the file modification or log-event time.
 
-With these filters in `~/.logg.conf`:
+With these filters in `~/.logc.conf`:
 
 ```ini
 ignore_line=.*GET /health.*
@@ -129,9 +129,9 @@ ignore_line=.*GET /metrics.*
 the health-check line is removed from the snapshot. In short:
 
 ```text
-logg                 Show a one-time overview of recent application activity.
-logg payment         Show payment logs and keep watching them.
-logg payment ERROR   Find errors in payment logs.
+logc                 Show a one-time overview of recent application activity.
+logc payment         Show payment logs and keep watching them.
+logc payment ERROR   Find errors in payment logs.
 ```
 
 > Future improvement: the default snapshot can prioritize the 5–10 most active or relevant files and include compact activity metadata, instead of potentially displaying 20 files × 10 lines. This is not implemented yet.
@@ -150,14 +150,14 @@ api                 auto-discovered name or configured group
 :8080               listening port -> PID -> open log files
 ```
 
-For Linux process selectors, `logg` inspects `/proc/<pid>/fd`. Port lookup uses `lsof` when available, with `ss` as a Linux fallback.
+For Linux process selectors, `logc` inspects `/proc/<pid>/fd`. Port lookup uses `lsof` when available, with `ss` as a Linux fallback.
 
 ### Search without grep pipelines
 
 ```bash
-logg api ERROR
-logg api 'timeout|connection reset'
-logg ERROR
+logc api ERROR
+logc api 'timeout|connection reset'
+logc ERROR
 ```
 
 The second positional expression is a Go-compatible regular expression. A one-argument expression that does not resolve to a source becomes a search across default application logs.
@@ -182,7 +182,7 @@ By default a search is constrained to `recent` from config (normally 24h). `--si
 
 ### Fair multi-file follow
 
-A hot file should not visually starve quieter files. `logg` buffers updates and prints small per-file batches in round-robin order.
+A hot file should not visually starve quieter files. `logc` buffers updates and prints small per-file batches in round-robin order.
 
 Defaults:
 
@@ -193,7 +193,7 @@ max batch/file      10 lines
 max buffer/file     2000 lines
 ```
 
-If a source produces logs faster than the terminal can display them, old buffered lines are bounded and `logg` tells you how many were skipped rather than growing memory forever.
+If a source produces logs faster than the terminal can display them, old buffered lines are bounded and `logc` tells you how many were skipped rather than growing memory forever.
 
 Log rotation and truncation are detected while following.
 
@@ -226,26 +226,26 @@ These filters apply to both snapshots/searches and follow mode.
 Default config:
 
 ```text
-~/.logg.conf
+~/.logc.conf
 ```
 
 Override it with:
 
 ```bash
-LOGG_CONFIG=/path/to/logg.conf logg
+LOGC_CONFIG=/path/to/logc.conf logc
 ```
 
 Create a starter file:
 
 ```bash
-logg config init
+logc config init
 ```
 
 Inspect it:
 
 ```bash
-logg config path
-logg config show
+logc config path
+logc config show
 ```
 
 Example:
@@ -291,30 +291,30 @@ color=true
 Requires Go 1.22+ to build.
 
 ```bash
-go build -trimpath -o logg .
-sudo install -m 755 logg /usr/local/bin/logg
+go build -trimpath -o logc .
+sudo install -m 755 logc /usr/local/bin/logc
 ```
 
 or:
 
 ```bash
 make build
-sudo install -m 755 bin/logg /usr/local/bin/logg
+sudo install -m 755 bin/logc /usr/local/bin/logc
 ```
 
 ## Homebrew
 
-This repository includes `Formula/logg.rb`. After publishing the repo and a release tarball, replace `YOUR_GITHUB_USER` and the release SHA256 in the Formula and publish it through a Homebrew tap:
+This repository includes `Formula/logc.rb`. After publishing the repo and a release tarball, replace `YOUR_GITHUB_USER` and the release SHA256 in the Formula and publish it through a Homebrew tap:
 
 ```bash
 brew tap YOUR_GITHUB_USER/tap
-brew install logg
+brew install logc
 ```
 
 If the project is eventually accepted into Homebrew/core, installation becomes simply:
 
 ```bash
-brew install logg
+brew install logc
 ```
 
 ## Release
@@ -332,4 +332,4 @@ and uploads compressed artifacts plus checksums when a `v*` tag is pushed.
 
 ## Scope
 
-This release deliberately focuses on local logs and SRE ergonomics. AI analysis is not part of the core yet. The architecture keeps filtering and source resolution inside `logg` so future analyzers can consume a consistent log stream rather than reimplement path discovery and command composition.
+This release deliberately focuses on local logs and SRE ergonomics. AI analysis is not part of the core yet. The architecture keeps filtering and source resolution inside `logc` so future analyzers can consume a consistent log stream rather than reimplement path discovery and command composition.
