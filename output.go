@@ -11,8 +11,10 @@ import (
 type printer struct{ color bool }
 
 var (
-	errLevel   = regexp.MustCompile(`(?i)\b(error|err|fatal|panic|critical|severe|exception|traceback)\b`)
+	fatalLevel = regexp.MustCompile(`(?i)\b(fatal|panic|critical|severe|exception|traceback)\b`)
+	errLevel   = regexp.MustCompile(`(?i)\b(error|err)\b`)
 	warnLevel  = regexp.MustCompile(`(?i)\b(warn|warning)\b`)
+	infoLevel  = regexp.MustCompile(`(?i)\b(info)\b`)
 	debugLevel = regexp.MustCompile(`(?i)\b(debug|trace)\b`)
 )
 
@@ -44,12 +46,16 @@ func (p *printer) decorate(line string) string {
 		return line
 	}
 	switch {
+	case fatalLevel.MatchString(line):
+		return "\x1b[1;35m" + line + "\x1b[0m"
 	case errLevel.MatchString(line):
-		return "\x1b[31m" + line + "\x1b[0m"
+		return "\x1b[1;31m" + line + "\x1b[0m"
 	case warnLevel.MatchString(line):
 		return "\x1b[33m" + line + "\x1b[0m"
+	case infoLevel.MatchString(line):
+		return "\x1b[36m" + line + "\x1b[0m"
 	case debugLevel.MatchString(line):
-		return "\x1b[2m" + line + "\x1b[0m"
+		return "\x1b[2;34m" + line + "\x1b[0m"
 	default:
 		return line
 	}
