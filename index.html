@@ -103,7 +103,7 @@
       backdrop-filter:blur(18px);
       border-bottom:1px solid var(--line);
     }
-    .nav-inner{height:78px;display:flex;align-items:center;gap:32px}
+    .nav-inner{height:64px;display:flex;align-items:center;gap:28px}
     .brand{
       display:inline-flex;align-items:center;gap:10px;
       font:800 27px/1 var(--mono); color:var(--teal);
@@ -129,22 +129,30 @@
     .small-link{font-size:14px;color:#d3c8e4}
 
     /* hero */
-    .hero{padding:112px 0 88px;min-height:690px;display:grid;align-items:center}
-    .hero-grid{display:grid;grid-template-columns:.88fr 1.12fr;gap:84px;align-items:center}
+    .hero{padding:64px 0 46px;min-height:0;display:grid;align-items:center}
+    .hero-grid{display:grid;grid-template-columns:.88fr 1.12fr;gap:54px;align-items:center}
     h1{
       font-size:clamp(48px,7vw,79px);
-      line-height:.96;letter-spacing:-.055em;margin:0 0 24px;font-weight:820;
+      line-height:1.04;letter-spacing:-.055em;margin:0 0 24px;padding-bottom:.04em;font-weight:820;
     }
     h1 span{
-      display:block;color:var(--teal);
-      background:linear-gradient(100deg,#e8c7ff 4%,#b568ff 48%,#62d9ff 100%);
-      -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+      display:block;line-height:1.1;padding-bottom:.08em;
+      color:#cf9cff;text-shadow:0 0 28px rgba(181,104,255,.28);
     }
     .hero-copy p{
-      color:#d2c8df; font-size:18px; max-width:570px; margin:0 0 34px;
+      color:#d2c8df; font-size:17px; max-width:570px; margin:0 0 28px;
     }
-    .hero-actions{display:flex;gap:14px;flex-wrap:wrap}
-    .trust{margin-top:28px;display:flex;gap:20px;flex-wrap:wrap;color:#8fa09a;font-size:12px}
+    .hero-actions{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px}
+    .hero-install-wrap{width:min(100%,420px)}
+    .hero-install{
+      display:flex;align-items:center;gap:12px;width:100%;
+      padding:10px 12px 10px 14px;border:1px solid rgba(191,146,255,.34);border-radius:11px;
+      background:rgba(15,9,31,.72);box-shadow:inset 0 1px rgba(255,255,255,.03);
+    }
+    .hero-install code{min-width:0;overflow:auto;white-space:nowrap;color:#f0e3ff;font:13px var(--mono)}
+    .hero-install .copy{margin-left:auto}
+    .hero-install-note{margin:7px 2px 0;color:#9185a5;font-size:11px}
+    .trust{margin-top:18px;display:flex;gap:18px;flex-wrap:wrap;color:#8fa09a;font-size:12px}
     .trust span::before{content:"•";color:var(--teal);margin-right:7px}
     .trust span:first-child::before{content:"◌"}
 
@@ -164,7 +172,7 @@
     .dot.r{background:#ff625f}.dot.y{background:#f6c64f}.dot.g{background:#36c85f}
     .terminal-title{margin-left:auto;margin-right:auto;transform:translateX(-25px)}
     .terminal-body{
-      font:12.5px/1.6 var(--mono);padding:26px 28px 24px;min-height:410px;
+      font:12px/1.55 var(--mono);padding:22px 24px 20px;min-height:370px;
       overflow:auto; color:#d5cce3;
     }
     .terminal-body pre,.mini-terminal pre,.beforeafter pre{margin:0;white-space:pre-wrap}
@@ -177,22 +185,22 @@
     }
 
     /* shared sections */
-    section{padding:108px 0;scroll-margin-top:78px}
+    section{padding:60px 0;scroll-margin-top:64px}
     .section-title{
       font-size:34px;letter-spacing:-.03em;margin:0 0 26px;font-weight:780;
     }
     .section-title span{color:var(--teal)}
-    .section-intro{color:var(--muted);max-width:720px;margin:-14px 0 38px;font-size:16px}
+    .section-intro{color:var(--muted);max-width:720px;margin:-14px 0 30px;font-size:16px}
 
     /* comparison */
-    .comparison{padding-top:28px}
-    .comparison-heading{max-width:690px;margin-bottom:38px}
+    .comparison{padding-top:4px}
+    .comparison-heading{max-width:690px;margin-bottom:24px}
     .comparison-heading .eyebrow{margin-bottom:11px}
     .comparison-heading .section-title{margin-bottom:14px}
 
     /* before after */
     .beforeafter{
-      margin-top:0;padding:38px;
+      margin-top:0;padding:24px;
       border:1px solid var(--line);border-radius:var(--radius);
       background:linear-gradient(135deg,rgba(28,18,54,.92),rgba(10,7,22,.94));
       box-shadow:0 18px 58px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.03);
@@ -206,7 +214,11 @@
     .ba-caption{text-align:center;color:#b4a9c5;font-size:13px;margin-top:20px}
 
     /* features */
-    .feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+    #features{
+      position:relative;border-block:1px solid rgba(202,172,255,.09);
+      background:linear-gradient(90deg,rgba(111,72,255,.055),transparent 36%,rgba(72,202,255,.035));
+    }
+    .feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
     .card{
       position:relative;overflow:hidden;
       border:1px solid var(--line);border-radius:14px;
@@ -216,7 +228,7 @@
     }
     .card::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 90% 0,rgba(121,91,255,.14),transparent 38%);pointer-events:none}
     .card:hover{border-color:rgba(203,169,255,.40);transform:translateY(-3px);box-shadow:0 18px 42px rgba(0,0,0,.24),0 0 32px rgba(136,76,255,.10)}
-    .feature{padding:27px;display:grid;grid-template-columns:42px 1fr;gap:16px;min-height:166px}
+    .feature{padding:23px;display:grid;grid-template-columns:42px 1fr;gap:14px;min-height:154px}
     .icon{
       width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
       color:var(--teal-2);border:1px solid rgba(183,125,255,.30);background:rgba(168,85,247,.10)
@@ -226,8 +238,9 @@
     .feature p{margin:0;color:#c0b5cf;font-size:14px;line-height:1.58}
 
     /* examples */
-    .examples-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
-    .example-card{padding:25px;min-width:0;display:flex;flex-direction:column}
+    #examples{padding-top:56px;padding-bottom:70px}
+    .examples-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    .example-card{padding:21px;min-width:0;display:flex;flex-direction:column}
     .example-label{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;margin:0 0 16px}
     .badge{
       flex:0 0 auto;width:23px;height:23px;border-radius:50%;
@@ -235,76 +248,50 @@
     }
     .mini-terminal{
       border:1px solid rgba(183,235,223,.17);border-radius:10px;
-      background:rgba(6,4,14,.84);padding:18px;min-height:310px;overflow:hidden;
-      font:11.5px/1.58 var(--mono);color:#cfc4dc;
+      flex:1;background:rgba(6,4,14,.84);padding:16px;min-height:276px;overflow:hidden;
+      font:11px/1.52 var(--mono);color:#cfc4dc;
     }
 
-    /* productivity */
-    .why-grid{
-      display:grid;grid-template-columns:.82fr 1.18fr;gap:56px;align-items:center;
-      padding:48px;border:1px solid var(--line);border-radius:var(--radius);
-      background:linear-gradient(145deg,rgba(23,14,47,.63),rgba(10,7,23,.46));
-    }
-    .checks{display:grid;gap:12px;color:#ded5ea;font-size:15px}
-    .checks span::before{content:"✓";color:var(--teal);font-weight:900;margin-right:9px}
-    .stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
-    .stat{padding:26px;text-align:center;min-height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center}
-    .stat .icon{margin-bottom:12px}
-    .stat strong{font-size:15px;line-height:1.25}
-    .stat p{margin:6px 0 0;font-size:12.5px;color:var(--muted)}
-
-    /* oss */
-    .oss{
-      padding:38px;border:1px solid rgba(190,137,255,.34);border-radius:var(--radius);
-      background:
-        radial-gradient(circle at 15% 40%,rgba(181,93,255,.18),transparent 23rem),
-        radial-gradient(circle at 90% 0,rgba(63,208,255,.12),transparent 20rem),
-        linear-gradient(145deg,rgba(23,14,46,.97),rgba(9,6,21,.94));
-    }
-    .oss-grid{display:grid;grid-template-columns:1fr auto;gap:48px;align-items:center}
-    .oss h2{font-size:31px;margin:0 0 10px}.oss h2 span{color:var(--teal)}
-    .oss p{color:#c7bbd6;max-width:650px;margin:0}
-    .oss-actions{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
-
-    /* resources */
-    .resource-box{padding:36px;border:1px solid var(--line);border-radius:var(--radius);background:rgba(16,10,34,.82)}
-    .resource-links{display:flex;gap:14px;flex-wrap:wrap}
-    .resource-links a{
-      border:1px solid var(--line-strong);border-radius:8px;padding:10px 15px;
-      color:#d5b5ff;font:12px var(--mono);background:rgba(168,85,247,.07)
-    }
-    .resource-links a:hover{border-color:var(--teal);background:rgba(168,85,247,.16)}
-
-    /* install */
-    .install-card{display:grid;grid-template-columns:1fr auto;gap:36px;align-items:center;padding:34px;margin-top:42px}
-    .install-command{
-      display:flex;align-items:center;gap:12px;border:1px solid var(--line);
-      background:rgba(7,5,16,.84);border-radius:10px;padding:15px 17px;font:13px var(--mono);min-width:min(100%,480px)
-    }
-    .install-command code{overflow:auto;white-space:nowrap;color:#e4d8f4}
     .copy{
       margin-left:auto;border:0;background:transparent;color:var(--teal);
       cursor:pointer;font:700 12px var(--mono)
     }
 
     /* footer */
-    footer{border-top:1px solid var(--line);padding:56px 0 64px;margin-top:40px}
-    .footer-grid{display:grid;grid-template-columns:1fr auto;gap:40px;align-items:center}
-    .footer-links{display:flex;gap:28px;color:#b6abc6;font-size:13px;flex-wrap:wrap;justify-content:flex-end}
+    footer{
+      border-top:1px solid var(--line);padding:42px 0 36px;margin-top:0;
+      background:linear-gradient(180deg,rgba(14,9,29,.28),rgba(7,5,16,.68));
+    }
+    .footer-grid{display:grid;grid-template-columns:1.15fr .7fr 1.15fr;gap:44px;align-items:start}
+    .footer-heading{margin:2px 0 14px;color:#d8c9ea;font:800 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase}
+    .footer-links{display:grid;gap:10px;color:#b6abc6;font-size:13px}
+    .footer-links a:hover,.footer-resources a:hover{color:var(--teal-2)}
     .footer-note{font-size:12px;color:#958aa8;margin-top:11px}
-    .ascii{font:9px/1.08 var(--mono);color:rgba(184,118,255,.35);white-space:pre;text-align:right;margin-top:11px}
+    .footer-resources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 14px}
+    .footer-resources a{color:#bba6d8;font:11px/1.35 var(--mono)}
+    .ascii{font:9px/1.08 var(--mono);color:rgba(184,118,255,.35);white-space:pre;margin-top:18px}
 
     @media (prefers-reduced-motion:reduce){.btn,.card{transition:none}.card:hover,.btn:hover{transform:none}}
 
     /* responsive */
     @media (max-width:980px){
       .nav-links{display:none}
-      .hero-grid,.why-grid,.oss-grid{grid-template-columns:1fr}
-      .hero{padding-top:76px;min-height:0}
+      .hero-grid{grid-template-columns:1fr}
+      .hero{padding-top:50px;min-height:0}
       .feature-grid{grid-template-columns:repeat(2,1fr)}
       .examples-grid{grid-template-columns:repeat(2,1fr)}
-      .stat-grid{grid-template-columns:repeat(2,1fr)}
-      .oss-actions{justify-content:flex-start}
+      .footer-grid{grid-template-columns:1fr 1fr;gap:32px}
+    }
+    @media (max-width:760px){
+      .wrap{width:min(100% - 40px,1240px)}
+      .hero-grid{gap:38px}
+      h1{font-size:clamp(46px,11vw,62px)}
+      .hero-copy p{font-size:16px}
+      .terminal-body{min-height:0;font-size:11px;padding:20px}
+      .examples-grid{grid-template-columns:1fr}
+      #examples{padding:48px 0}
+      .footer-grid{grid-template-columns:1fr;gap:28px}
+      .footer-resources{max-width:390px}
     }
     @media (max-width:650px){
       .wrap{width:min(100% - 32px,1240px)}
@@ -313,20 +300,22 @@
       .btn{padding:10px 13px}
       .brand{font-size:24px}
       h1{font-size:52px}
-      section{padding:56px 0}
-      .hero{padding:60px 0 54px}
-      .hero-grid{gap:40px}
+      section{padding:44px 0}
+      #examples{padding:44px 0}
+      .hero{padding:42px 0 34px}
+      .hero-grid{gap:32px}
+      .hero-install-wrap{width:100%}
+      .hero-install{gap:8px}
       .terminal-body{font-size:11px;padding:20px;min-height:0}
-      .comparison{padding-top:12px}
-      .comparison-heading{margin-bottom:28px}
-      .beforeafter{padding:24px}
+      .comparison{padding-top:4px}
+      .comparison-heading{margin-bottom:22px}
+      .beforeafter{padding:20px}
       .ba-grid{grid-template-columns:1fr;gap:22px}.arrow{transform:rotate(90deg)}
-      .feature-grid,.examples-grid,.stat-grid{grid-template-columns:1fr}
-      .feature{min-height:auto;padding:22px}
-      .example-card{padding:20px}
-      .mini-terminal{height:auto;min-height:230px;padding:16px}
-      .why-grid{padding:28px}
-      .install-card,.footer-grid{grid-template-columns:1fr}
+      .feature-grid,.examples-grid{grid-template-columns:1fr}
+      .feature{min-height:auto;padding:20px}
+      .example-card{padding:18px}
+      .mini-terminal{height:auto;min-height:220px;padding:15px}
+      .footer-grid{grid-template-columns:1fr}
       .footer-links{justify-content:flex-start}
       .nav-actions .btn.outline{display:none}
     }
@@ -356,8 +345,15 @@
             <div class="eyebrow">SRE-native log CLI</div>
             <h1>One command <span>for logs.</span></h1>
             <p>Find, search, and follow logs without remembering paths or chaining <span class="mono">tail</span>, <span class="mono">grep</span>, <span class="mono">find</span>, and <span class="mono">journalctl</span>. Built for SREs, always free, and open source.</p>
+            <div class="hero-install-wrap" id="install">
+              <div class="hero-install">
+                <span class="prompt">$</span>
+                <code id="installText">brew install logc</code>
+                <button class="copy" type="button" onclick="copyInstall(this)">COPY</button>
+              </div>
+              <div class="hero-install-note">Homebrew installation is under construction.</div>
+            </div>
             <div class="hero-actions">
-              <a class="btn primary" href="#install">&gt;_ Install logc</a>
               <a class="btn" href="#examples">Read the Docs</a>
             </div>
             <div class="trust">
@@ -548,76 +544,6 @@ Resolved sources:
       </div>
     </section>
 
-    <section class="outcomes">
-      <div class="wrap why-grid">
-        <div>
-          <h2 class="section-title">Why <span>SREs like it</span></h2>
-          <div class="checks">
-            <span>Fewer commands to remember</span>
-            <span>Faster incident triage</span>
-            <span>Quicker request-id tracing</span>
-            <span>Easier debugging on unfamiliar machines</span>
-            <span>Better focus during oncall</span>
-          </div>
-        </div>
-        <div class="stat-grid">
-          <article class="card stat"><div class="icon">⌨</div><strong>Less command switching</strong><p>Stay in flow.</p></article>
-          <article class="card stat"><div class="icon">ϟ</div><strong>Faster path discovery</strong><p>Find the right log instantly.</p></article>
-          <article class="card stat"><div class="icon">◎</div><strong>Cleaner incident workflow</strong><p>From signal to resolution.</p></article>
-          <article class="card stat"><div class="icon">⌁</div><strong>Better oncall ergonomics</strong><p>Reduce cognitive load.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section id="open-source">
-      <div class="wrap">
-        <div class="oss">
-          <div class="oss-grid">
-            <div>
-              <h2><span>Open source.</span> Always free.</h2>
-              <p>logc is built in the open and intended to remain free for every engineer, SRE, and ops team. Fork the project, build the feature you need, and open a pull request.</p>
-            </div>
-            <div class="oss-actions" id="github">
-              <a class="btn primary" href="https://github.com/zchensh/logc" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
-              <a class="btn outline" href="https://github.com/zchensh/logc/fork" target="_blank" rel="noopener noreferrer">Fork &amp; Contribute</a>
-              <a class="btn" href="https://github.com/zchensh/logc/releases" target="_blank" rel="noopener noreferrer">Releases</a>
-              <a class="btn" href="https://github.com/zchensh/logc/issues" target="_blank" rel="noopener noreferrer">Issues</a>
-            </div>
-          </div>
-        </div>
-
-        <div id="install" class="card install-card">
-          <div>
-            <div class="eyebrow">Install</div>
-            <strong>Keep installation boring.</strong>
-            <div class="muted" style="font-size:13px;margin-top:4px">Install the CLI and start exploring local application logs immediately.</div>
-          </div>
-          <div class="install-command">
-            <span class="prompt">$</span>
-            <code id="installText">brew install logc</code>
-            <button class="copy" type="button" onclick="copyInstall(this)">COPY</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="resources">
-      <div class="wrap">
-        <div class="resource-box">
-          <h2 class="section-title" style="margin-bottom:8px">Resources for <span>logging &amp; observability</span></h2>
-          <p class="section-intro">Useful foundations, standards, open-source tools, and commercial logging platforms.</p>
-          <div class="resource-links">
-            <a href="https://www.linuxfoundation.org/" target="_blank" rel="noopener noreferrer">linuxfoundation.org ↗</a>
-            <a href="https://opentelemetry.io/" target="_blank" rel="noopener noreferrer">opentelemetry.io ↗</a>
-            <a href="https://vector.dev/" target="_blank" rel="noopener noreferrer">vector.dev ↗</a>
-            <a href="https://www.rsyslog.com/" target="_blank" rel="noopener noreferrer">rsyslog.com ↗</a>
-            <a href="https://systemd.io/" target="_blank" rel="noopener noreferrer">systemd.io ↗</a>
-            <a href="https://www.splunk.com/" target="_blank" rel="noopener noreferrer">splunk.com ↗</a>
-            <a href="https://grafana.com/" target="_blank" rel="noopener noreferrer">grafana.com ↗</a>
-          </div>
-        </div>
-      </div>
-    </section>
   </main>
 
   <footer>
@@ -625,17 +551,29 @@ Resolved sources:
       <div>
         <a class="brand" href="#top"><span class="brand-mark">&gt;_</span>logc</a>
         <div class="footer-note">Open-source log tooling for SREs.</div>
-        <div class="footer-note">Homebrew installation (<span class="mono">brew install logc</span>) is under construction.</div>
         <div class="footer-note">Parts of logc are AI-assisted. Provided as-is; the author and contributors are not liable for results, damages, losses, or other consequences of its use.</div>
         <div class="footer-note">© logc — open source and always free</div>
+        <div class="ascii" aria-hidden="true">01001100 01101111 01100111 01100011
+ /\/\  signal &gt; noise  /\/\
+     logs → context → fix</div>
       </div>
       <div>
+        <div class="footer-heading">Project</div>
         <div class="footer-links">
           <a href="https://github.com/zchensh/logc" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://github.com/zchensh/logc#readme" target="_blank" rel="noopener noreferrer">Docs</a><a href="https://github.com/zchensh/logc/releases" target="_blank" rel="noopener noreferrer">Releases</a><a href="https://github.com/zchensh/logc/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a>
         </div>
-        <div class="ascii" aria-hidden="true">01001100 01101111 01100111 01100011
- /\/\  signal > noise  /\/\
-     logs → context → fix</div>
+      </div>
+      <div>
+        <div class="footer-heading">Logging &amp; observability</div>
+        <div class="footer-resources">
+          <a href="https://www.linuxfoundation.org/" target="_blank" rel="noopener noreferrer">Linux Foundation ↗</a>
+          <a href="https://opentelemetry.io/" target="_blank" rel="noopener noreferrer">OpenTelemetry ↗</a>
+          <a href="https://vector.dev/" target="_blank" rel="noopener noreferrer">Vector ↗</a>
+          <a href="https://www.rsyslog.com/" target="_blank" rel="noopener noreferrer">rsyslog ↗</a>
+          <a href="https://systemd.io/" target="_blank" rel="noopener noreferrer">systemd ↗</a>
+          <a href="https://www.splunk.com/" target="_blank" rel="noopener noreferrer">Splunk ↗</a>
+          <a href="https://grafana.com/" target="_blank" rel="noopener noreferrer">Grafana ↗</a>
+        </div>
       </div>
     </div>
   </footer>
