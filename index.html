@@ -142,8 +142,9 @@
     .hero-copy p{
       color:#d2c8df; font-size:17px; max-width:570px; margin:0 0 28px;
     }
-    .hero-actions{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px}
-    .hero-install-wrap{width:min(100%,420px)}
+    .hero-install-row{display:flex;align-items:flex-start;gap:12px;margin-top:16px}
+    .hero-actions{display:flex;gap:14px;flex-wrap:wrap}
+    .hero-install-wrap{width:280px;flex:0 1 280px}
     .hero-install{
       display:flex;align-items:center;gap:12px;width:100%;
       padding:10px 12px 10px 14px;border:1px solid rgba(191,146,255,.34);border-radius:11px;
@@ -304,6 +305,7 @@
       #examples{padding:44px 0}
       .hero{padding:42px 0 34px}
       .hero-grid{gap:32px}
+      .hero-install-row{flex-direction:column;gap:12px}
       .hero-install-wrap{width:100%}
       .hero-install{gap:8px}
       .terminal-body{font-size:11px;padding:20px;min-height:0}
@@ -345,16 +347,18 @@
             <div class="eyebrow">SRE-native log CLI</div>
             <h1>One command <span>for logs.</span></h1>
             <p>Find, search, and follow logs without remembering paths or chaining <span class="mono">tail</span>, <span class="mono">grep</span>, <span class="mono">find</span>, and <span class="mono">journalctl</span>. Built for SREs, always free, and open source.</p>
-            <div class="hero-install-wrap" id="install">
-              <div class="hero-install">
-                <span class="prompt">$</span>
-                <code id="installText">brew install logc</code>
-                <button class="copy" type="button" onclick="copyInstall(this)">COPY</button>
+            <div class="hero-install-row">
+              <div class="hero-install-wrap" id="install">
+                <div class="hero-install">
+                  <span class="prompt">$</span>
+                  <code id="installText">brew install logc</code>
+                  <button class="copy" type="button" onclick="copyInstall(this)">COPY</button>
+                </div>
+                <div class="hero-install-note">*Homebrew installation is under construction.</div>
               </div>
-              <div class="hero-install-note">Homebrew installation is under construction.</div>
-            </div>
-            <div class="hero-actions">
-              <a class="btn" href="#examples">Read the Docs</a>
+              <div class="hero-actions">
+                <a class="btn" href="#examples">Read the Docs</a>
+              </div>
             </div>
             <div class="trust">
               <span>Open source</span><span>Always free</span><span>CLI-first</span><span>Linux &amp; macOS</span>
@@ -367,7 +371,7 @@
               <span class="terminal-title">terminal</span>
             </div>
             <div class="terminal-body">
-<pre><span class="prompt">$</span> <span class="cmd">logc api 'timeout|reset' --since 30m -f</span>
+<pre><span class="prompt">$</span> <span class="cmd">logc</span>
 
 <span class="path">/srv/api/log/app.log</span> <span class="dim">(3 matches)</span>
 2026-08-08 13:47:32  <span class="info">INFO </span> [http]  request_id=8f1a9  GET /v1/users 200 34ms
@@ -538,6 +542,38 @@ Resolved sources:
           (111: Connection refused)
 
 <span class="dim">3 sources · following</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">5</span>Search history, then follow</div>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc api 'timeout|reset' --since 30m -f
+
+<span class="path">/srv/api/log/app.log.1.gz</span>
+13:36:45 <span class="err">ERROR</span> upstream timeout after 30s
+
+<span class="path">/srv/api/log/app.log</span>
+13:49:11 <span class="err">ERROR</span> upstream timeout after 30s
+<span class="ok">-- following matching lines --</span>
+13:50:02 <span class="warn">WARN</span> connection reset by peer
+
+<span class="dim">2 files · since 30m · following</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">6</span>Stream system logs</div>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc system
+
+2026-08-08 14:22:07 host systemd[1]: api.service started
+2026-08-08 14:22:12 host nginx[1542]: worker process ready
+2026-08-08 14:22:31 host kernel: eth0 link is up
+2026-08-08 14:22:38 host systemd[1]: backup.service completed
+
+<span class="dim">streaming operating-system logs</span>
+<span class="ok">-- following -- (press Ctrl+C to stop)</span></pre>
             </div>
           </article>
         </div>
