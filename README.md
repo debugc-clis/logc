@@ -6,7 +6,7 @@
 brew install logc
 ```
 
-> Homebrew installation is under construction. Until the formula is published, install from source with `go install github.com/zchensh/logc@latest`.
+> Homebrew installation is under construction. Until the formula is published, install from source using the steps below.
 
 <img src="assets/logc-demo.jpg" alt="logc displays recent application logs from payment API, worker, and nginx files" width="480" />
 
@@ -19,7 +19,7 @@ logc api 'timeout|reset' --since 30m -f
 | `find` + `grep` + `zgrep` + `tail` | `logc` |
 | Remember paths, rotated files, and shell pipelines. | Name the service and follow the signal. |
 
-**[Download a release](https://github.com/zchensh/logc/releases)** · **[Fork and contribute](https://github.com/zchensh/logc/fork)** · **[Configuration](#configuration)**
+**[Download a release](https://github.com/debugc-clis/logc/releases)** · **[Fork and contribute](https://github.com/debugc-clis/logc/fork)** · **[Configuration](#configuration)**
 
 ## Why logc
 
@@ -61,7 +61,7 @@ logc version
 For a user-local install managed by Go instead, run:
 
 ```bash
-go install github.com/zchensh/logc@latest
+go install .
 ```
 
 ## Common Workflows
@@ -177,7 +177,9 @@ On Linux, logc detects the distribution from `/etc/os-release` and automatically
 Requires Go 1.22+.
 
 ```bash
-go install github.com/zchensh/logc@latest
+git clone https://github.com/debugc-clis/logc.git
+cd logc
+go install .
 ```
 
 Or build from a checkout:
@@ -196,7 +198,7 @@ linux/amd64   linux/arm64
 darwin/amd64  darwin/arm64
 ```
 
-Each release includes SHA-256 checksums. See [GitHub Releases](https://github.com/zchensh/logc/releases).
+Each release includes SHA-256 checksums. See [GitHub Releases](https://github.com/debugc-clis/logc/releases).
 
 ### Homebrew
 
@@ -206,9 +208,9 @@ The `Formula/logc.rb` template is included, but the public Homebrew formula is n
 
 logc is open source and free to use. Fork the repository, build the feature you need, and open a pull request.
 
-- [Fork logc](https://github.com/zchensh/logc/fork)
-- [Report an issue](https://github.com/zchensh/logc/issues)
-- [Browse the source](https://github.com/zchensh/logc)
+- [Fork logc](https://github.com/debugc-clis/logc/fork)
+- [Report an issue](https://github.com/debugc-clis/logc/issues)
+- [Browse the source](https://github.com/debugc-clis/logc)
 
 ## Scope
 
