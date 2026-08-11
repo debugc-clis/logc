@@ -26,6 +26,21 @@ func TestConfigGroupsAndIgnoreLines(t *testing.T) {
 	}
 }
 
+func TestDefaultConfigIncludesMySQLLogGroup(t *testing.T) {
+	cfg := defaultConfigForPlatform("linux", "ID=ubuntu\n")
+	paths := cfg.Groups["mysql"]
+	for _, want := range []string{
+		"/var/log/mysql/*.log",
+		"/var/log/mysqld.log",
+		"/var/lib/mysql/*.err",
+		"/opt/homebrew/var/mysql/*.log",
+	} {
+		if !containsString(paths, want) {
+			t.Fatalf("mysql group missing %q: %#v", want, paths)
+		}
+	}
+}
+
 func TestSystemLogExcludesUseLinuxDistribution(t *testing.T) {
 	ubuntu := systemLogExcludes("linux", "ID=ubuntu\nID_LIKE=debian\n")
 	if !containsString(ubuntu, "/var/log/syslog*") || !containsString(ubuntu, "/var/log/auth.log*") {

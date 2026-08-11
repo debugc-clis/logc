@@ -5,6 +5,7 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 .PHONY: build test install clean dist
 
 build:
+	mkdir -p bin
 	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) .
 
 test:

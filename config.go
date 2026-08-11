@@ -35,7 +35,15 @@ func defaultConfigForPlatform(goos, osRelease string) Config {
 	return Config{
 		DefaultLogDirs: []string{"/var/log", "/opt/var/log", "/opt/log"},
 		Excludes:       systemLogExcludes(goos, osRelease),
-		Groups:         map[string][]string{},
+		Groups: map[string][]string{
+			"mysql": {
+				"/var/log/mysql/*.log", "/var/log/mysql/*.err",
+				"/var/log/mariadb/*.log", "/var/log/mariadb/*.err",
+				"/var/log/mysqld.log", "/var/lib/mysql/*.log", "/var/lib/mysql/*.err",
+				"/usr/local/var/mysql/*.log", "/usr/local/var/mysql/*.err",
+				"/opt/homebrew/var/mysql/*.log", "/opt/homebrew/var/mysql/*.err",
+			},
+		},
 		Lines:          10,
 		MaxFiles:       20,
 		FlushInterval:  500 * time.Millisecond,
@@ -287,6 +295,9 @@ exclude=/var/log/dmesg*
 # ignore_line=.*GET /metrics.*
 
 # Optional memorable names. Both forms are supported:
+# logc includes a built-in mysql source for common MySQL and MariaDB file-log paths.
+# Run "logc mysql" to follow it, or add your own path below.
+# group.mysql=/srv/mysql/log/*.log
 # group.api=/srv/api/log/*.log
 # [group.payment]
 # path=/srv/payment/**/*.log

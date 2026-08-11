@@ -46,6 +46,24 @@ logc api 'timeout|reset' --since 30m -f
 
 `logc` searches `/var/log`, `/opt/var/log`, and `/opt/log` by default. It considers files modified in the last 24 hours, shows up to 20 files and 10 initial lines per file, then follows those files for new lines. It applies configured `ignore_line` filters throughout.
 
+## Build and Install
+
+Requires Go 1.22+.
+
+```bash
+git clone https://github.com/debugc-clis/logc.git
+cd logc
+make build
+sudo install -m 755 bin/logc /usr/local/bin/logc
+logc version
+```
+
+For a user-local install managed by Go instead, run:
+
+```bash
+go install github.com/zchensh/logc@latest
+```
+
 ## Common Workflows
 
 ### Find the right source
@@ -133,6 +151,9 @@ ignore_line=.*GET /health.*
 ignore_line=.*GET /metrics.*
 
 # Named sources.
+# `mysql` is built in and searches common MySQL/MariaDB file-log paths.
+# Add a custom path when your database uses a nonstandard data directory.
+group.mysql=/srv/mysql/log/*.log
 group.api=/srv/api/log/*.log
 [group.payment]
 path=/srv/payment/**/*.log
