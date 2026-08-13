@@ -1,12 +1,6 @@
 # logc
 
-> One command to find, search, and follow local logs.
-
-```bash
-brew install logc
-```
-
-> Homebrew installation is under construction. Until the formula is published, install from source using the steps below.
+> One command to find, search, follow, and watch local logs.
 
 <img src="assets/logc-demo.jpg" alt="logc displays recent application logs from payment API, worker, and nginx files" width="480" />
 
@@ -19,7 +13,7 @@ logc api 'timeout|reset' --since 30m -f
 | `find` + `grep` + `zgrep` + `tail` | `logc` |
 | Remember paths, rotated files, and shell pipelines. | Name the service and follow the signal. |
 
-**[Download a release](https://github.com/debugc-clis/logc/releases)** · **[Fork and contribute](https://github.com/debugc-clis/logc/fork)** · **[Configuration](#configuration)**
+**[Download a release](https://github.com/debugc-clis/logc/releases)** · **[Get started](#quick-start)** · **[Configuration](#configuration)** · **[Contribute](#contributing)**
 
 ## Why logc
 
@@ -28,6 +22,7 @@ logc api 'timeout|reset' --since 30m -f
 - **Discover** recent application logs without memorizing paths.
 - **Search** active, rotated, and gzip-compressed logs without switching between `grep` and `zgrep`.
 - **Follow** multiple files fairly, even when one source is noisy.
+- **Watch** matching events as a live alert summary with rates and duplicate counts.
 - **Resolve** services by configured name, file path, directory, glob, Linux process/PID, or listening port.
 - **Separate** application logs from common operating-system logs.
 
@@ -46,7 +41,7 @@ logc api 'timeout|reset' --since 30m -f
 
 `logc` searches `/var/log`, `/opt/var/log`, and `/opt/log` by default. It considers files modified in the last 24 hours, shows up to 20 files and 10 initial lines per file, then follows those files for new lines. It applies configured `ignore_line` filters throughout.
 
-## Build and Install
+## Install
 
 Requires Go 1.22+.
 
@@ -143,14 +138,6 @@ logc watch 'timeout|reset' '/opt/var/*log,/etc/log.log'
 
 Use `logc watch REGEX [TARGET...]` to watch one or more named sources, directories, files, or quoted glob patterns. Comma-separated targets are also supported. `logc watch api 'timeout|reset'` remains available for compatibility. The terminal dashboard redraws in place. When output is redirected, each refresh is printed as a new snapshot.
 
-## What You Get
-
-- **Fair follow mode** — Polls files every 250ms and flushes small per-file batches so a hot log cannot monopolize the terminal.
-- **Bounded buffering** — Keeps the newest 2,000 buffered lines per file by default and reports dropped lines when the terminal cannot keep up.
-- **Rotation aware** — Detects log replacement and truncation while following.
-- **Readable output** — Prints a full path per block; colors ERROR/FATAL/PANIC red, WARN yellow, and DEBUG/TRACE dim when stdout is a terminal. `NO_COLOR` and `--no-color` disable color.
-- **Noise control** — Applies `ignore_line` regular expressions to snapshots, searches, and follow mode.
-
 ## Configuration
 
 The default configuration path is `~/.logc.conf`. Set `LOGC_CONFIG=/path/to/logc.conf` to use another file.
@@ -195,41 +182,11 @@ max_buffer_lines=2000
 color=true
 ```
 
-On Linux, logc detects the distribution from `/etc/os-release` and automatically excludes the important operating-system debugging logs for that distribution. User, cron, package-manager, and installer logs are not excluded by default. Run `logc config show` to inspect the active patterns.
+On Linux, logc detects the distribution from `/etc/os-release` and excludes distribution-specific system-log paths from default application-log discovery. Use `logc system` for operating-system logs, or `logc config show` to inspect the active patterns.
 
-## Installation
+## Roadmap
 
-### Source
-
-Requires Go 1.22+.
-
-```bash
-git clone https://github.com/debugc-clis/logc.git
-cd logc
-go install .
-```
-
-Or build from a checkout:
-
-```bash
-make build
-sudo install -m 755 bin/logc /usr/local/bin/logc
-```
-
-### Releases
-
-Tagged releases publish downloadable archives for:
-
-```text
-linux/amd64   linux/arm64
-darwin/amd64  darwin/arm64
-```
-
-Each release includes SHA-256 checksums. See [GitHub Releases](https://github.com/debugc-clis/logc/releases).
-
-### Homebrew
-
-The `Formula/logc.rb` template is included, but the public Homebrew formula is not available yet. When it is published, the install command at the top of this page will work.
+- [ ] Publish and maintain Homebrew package distribution.
 
 ## Contributing
 
