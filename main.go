@@ -24,6 +24,7 @@ USAGE
   logc TARGET REGEX            Search that source (regex; searches recent rotated logs too)
   logc REGEX                   Search all default application logs
   logc TARGET REGEX -f         Search existing logs, then keep following matching lines
+  logc watch REGEX [TARGET...] Show a real-time aggregated alert view
   logc system                  Follow operating-system logs
   logc docker [OPTIONS] NAME   Follow a Docker container's logs
   logc ls                      Discover available local log sources
@@ -37,6 +38,9 @@ EXAMPLES
   logc api ERROR --since 30m
   logc api ERROR -C 3
   logc api ERROR -f
+  logc watch ERROR
+  logc watch api 'timeout|reset'
+  logc watch ERROR /var/log/nginx '/opt/log/**/*.log' /etc/myapp/app.log
   logc /srv/api/log
   logc /srv/api/a.log /srv/worker/b.log
   logc '/srv/**/logs/*.log'
@@ -208,6 +212,8 @@ func realMain() int {
 			return configCommand(os.Args[2:])
 		case "system":
 			return systemCommand(os.Args[2:])
+		case "watch":
+			return watchCommand(os.Args[2:])
 		case "docker":
 			return dockerCommand(os.Args[2:])
 		case "ls", "list":

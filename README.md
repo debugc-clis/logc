@@ -129,6 +129,20 @@ logc docker -f api
 
 Use Docker's native flags exactly as you would with `docker logs`; place options before the container name. Docker must be installed and accessible in `PATH`.
 
+### Watch live alerts
+
+`logc watch` aggregates matching events instead of printing every line. It refreshes once per second with the event rate from the last minute, duplicate count, and first/last occurrence time.
+
+```bash
+logc watch ERROR
+logc watch api 'timeout|reset'
+logc watch api ERROR --since 30m
+logc watch ERROR /var/log/nginx '/opt/log/**/*.log' /etc/myapp/app.log
+logc watch 'timeout|reset' '/opt/var/*log,/etc/log.log'
+```
+
+Use `logc watch REGEX [TARGET...]` to watch one or more named sources, directories, files, or quoted glob patterns. Comma-separated targets are also supported. `logc watch api 'timeout|reset'` remains available for compatibility. The terminal dashboard redraws in place. When output is redirected, each refresh is printed as a new snapshot.
+
 ## What You Get
 
 - **Fair follow mode** — Polls files every 250ms and flushes small per-file batches so a hot log cannot monopolize the terminal.
