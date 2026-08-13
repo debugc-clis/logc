@@ -25,6 +25,7 @@ USAGE
   logc REGEX                   Search all default application logs
   logc TARGET REGEX -f         Search existing logs, then keep following matching lines
   logc system                  Follow operating-system logs
+  logc docker [OPTIONS] NAME   Follow a Docker container's logs
   logc ls                      Discover available local log sources
   logc where TARGET            Show what a target resolves to
 
@@ -42,6 +43,8 @@ EXAMPLES
   logc @nginx
   logc @12345
   logc :8080
+  logc docker --tail 100 api
+  logc docker --since 30m --timestamps api
 
 SMALL SET OF OPTIONAL FLAGS
   -f                  Keep following after a search
@@ -205,6 +208,8 @@ func realMain() int {
 			return configCommand(os.Args[2:])
 		case "system":
 			return systemCommand(os.Args[2:])
+		case "docker":
+			return dockerCommand(os.Args[2:])
 		case "ls", "list":
 			return listCommand()
 		case "where":

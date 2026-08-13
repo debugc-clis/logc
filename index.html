@@ -242,6 +242,8 @@
     #examples{padding-top:56px;padding-bottom:70px}
     .examples-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
     .example-card{padding:21px;min-width:0;display:flex;flex-direction:column}
+    .docker-example{grid-column:1 / -1}
+    .docker-example .mini-terminal{min-height:0}
     .example-label{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;margin:0 0 16px}
     .badge{
       flex:0 0 auto;width:23px;height:23px;border-radius:50%;
@@ -290,6 +292,7 @@
       .hero-copy p{font-size:16px}
       .terminal-body{min-height:0;font-size:11px;padding:20px}
       .examples-grid{grid-template-columns:1fr}
+      .docker-example{grid-column:auto}
       #examples{padding:48px 0}
       .footer-grid{grid-template-columns:1fr;gap:28px}
       .footer-resources{max-width:390px}
@@ -574,6 +577,20 @@ Resolved sources:
 
 <span class="dim">streaming operating-system logs</span>
 <span class="ok">-- following -- (press Ctrl+C to stop)</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card docker-example">
+            <div class="example-label"><span class="badge">7</span>Follow a Docker container</div>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc docker api
+
+2026-08-08T14:31:04.812Z <span class="info">INFO</span> api listening on :8080
+2026-08-08T14:31:19.441Z <span class="warn">WARN</span> database latency=421ms
+2026-08-08T14:31:24.109Z <span class="err">ERROR</span> upstream timeout request_id=req-8f1aa
+2026-08-08T14:31:24.112Z <span class="info">INFO</span> retrying request_id=req-8f1aa attempt=1
+
+<span class="ok">-- following Docker logs -- (press Ctrl+C to stop)</span></pre>
             </div>
           </article>
         </div>

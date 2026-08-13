@@ -116,6 +116,19 @@ logc system --kernel
 
 On Linux, `logc` uses `journalctl` when available and falls back to `dmesg`; macOS uses `log stream`.
 
+### Follow Docker container logs
+
+`logc docker` forwards Docker log options directly to `docker logs` and follows by default.
+
+```bash
+logc docker api
+logc docker --tail 100 api
+logc docker --since 30m --timestamps api
+logc docker -f api
+```
+
+Use Docker's native flags exactly as you would with `docker logs`; place options before the container name. Docker must be installed and accessible in `PATH`.
+
 ## What You Get
 
 - **Fair follow mode** — Polls files every 250ms and flushes small per-file batches so a hot log cannot monopolize the terminal.
