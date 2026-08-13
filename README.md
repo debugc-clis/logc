@@ -17,7 +17,7 @@ logc api 'timeout|reset' --since 30m -f
 
 ## Why logc
 
-`logc` is a dependency-free Go CLI for local log triage. It brings application-log discovery, regular-expression search, history, and fair multi-file follow into one interface.
+`logc` is a dependency-free Go CLI for local log triage. It brings application-log discovery, regular-expression search, history, and fair multi-file follow into one interface. It focuses on local logs and SRE ergonomics: it does not send logs to a remote service or perform AI analysis.
 
 - **Discover** recent application logs without memorizing paths.
 - **Search** active, rotated, and gzip-compressed logs without switching between `grep` and `zgrep`.
@@ -186,6 +186,17 @@ On Linux, logc detects the distribution from `/etc/os-release` and excludes dist
 
 ## Roadmap
 
+### Implemented
+
+- [x] Discover and fairly follow recent application logs across multiple files.
+- [x] Search active, rotated, and gzip-compressed logs with regex, context, time filtering, and deduplication.
+- [x] Resolve named sources, files, directories, globs, Linux processes/PIDs, and ports.
+- [x] Configure log roots, source groups, exclusions, noise filters, and MySQL/MariaDB log paths.
+- [x] Stream system logs and Docker container logs.
+- [x] Watch matching events with live error rates, duplicate counts, and first/last occurrence times.
+
+### Planned
+
 - [ ] Publish and maintain Homebrew package distribution.
 
 ## Contributing
@@ -195,10 +206,6 @@ logc is open source and free to use. Fork the repository, build the feature you 
 - [Fork logc](https://github.com/debugc-clis/logc/fork)
 - [Report an issue](https://github.com/debugc-clis/logc/issues)
 - [Browse the source](https://github.com/debugc-clis/logc)
-
-## Scope
-
-logc focuses on local logs and SRE ergonomics. It does not send logs to a remote service or perform AI analysis. Its source resolution and filtering pipeline is designed to support future analyzers without reimplementing discovery and command composition.
 
 ## AI and Liability Notice
 
