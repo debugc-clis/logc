@@ -1,10 +1,10 @@
 class Logc < Formula
   desc "One-command local log discovery, follow, and regex search for SREs"
   homepage "https://logc.com"
-  url "https://github.com/zchensh/logc/archive/refs/tags/v0.2.0.tar.gz"
+  url "https://github.com/debugc-clis/logc/archive/refs/tags/v0.2.0.tar.gz"
   sha256 "REPLACE_WITH_RELEASE_TARBALL_SHA256"
   license "MIT"
-  head "https://github.com/zchensh/logc.git", branch: "main"
+  head "https://github.com/debugc-clis/logc.git", branch: "main"
 
   depends_on "go" => :build
 
