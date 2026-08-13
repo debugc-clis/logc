@@ -1,5 +1,6 @@
 # logc
 
+
 > One command to find, search, follow, and watch local logs.
 
 `logc` replaces the usual `find`, `grep`, `zgrep`, and `tail` chain with a focused local troubleshooting workflow. Start with the logs available on the machine, narrow to the signal you need, and keep watching as new events arrive.
