@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -11,6 +10,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	maxFollowReadBytes = int64(4 * 1024 * 1024)
+	maxCarryBytes      = 2 * 1024 * 1024
 )
 
 type streamLine struct {
@@ -23,12 +27,44 @@ type fileState struct {
 	Info           os.FileInfo
 	Offset         int64
 	Carry          string
+	CarryTruncated bool
 	Pending        []string
 	Dropped        int
 	Seq            int64
 	Prev           []streamLine
 	LastEmittedSeq int64
 	AfterRemaining int
+}
+
+func readAppended(path string, offset, limit int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(io.LimitReader(file, limit))
+}
+
+func splitAppended(carry string, carryTruncated bool, data []byte) (lines []string, next string, nextTruncated bool) {
+	text := carry + string(data)
+	parts := strings.Split(text, "\n")
+	if strings.HasSuffix(text, "\n") {
+		parts = parts[:len(parts)-1]
+	} else {
+		next = parts[len(parts)-1]
+		parts = parts[:len(parts)-1]
+	}
+	if carryTruncated && len(parts) > 0 {
+		parts[0] = "[truncated long line] " + parts[0]
+	}
+	if len(next) > maxCarryBytes {
+		next = next[len(next)-maxCarryBytes:]
+		nextTruncated = true
+	}
+	return parts, next, nextTruncated
 }
 
 type follower struct {
@@ -40,11 +76,23 @@ type follower struct {
 	skipInitial bool
 	mu          sync.Mutex
 	states      map[string]*fileState
+	failures    map[string]string
 }
 
 func newFollower(cfg Config, patterns []string, excludes []string, out *printer, q Query, skipInitial bool) *follower {
-	return &follower{cfg: cfg, patterns: patterns, excludes: excludes, out: out, query: q, skipInitial: skipInitial, states: map[string]*fileState{}}
+	return &follower{cfg: cfg, patterns: patterns, excludes: excludes, out: out, query: q, skipInitial: skipInitial, states: map[string]*fileState{}, failures: map[string]string{}}
 }
+
+func (f *follower) reportFailure(path string, err error) {
+	message := err.Error()
+	if f.failures[path] == message {
+		return
+	}
+	f.failures[path] = message
+	f.out.errorf("skipping %s: %v", path, err)
+}
+
+func (f *follower) clearFailure(path string) { delete(f.failures, path) }
 
 func readLastLines(path string, n int) ([]string, int64, os.FileInfo, error) {
 	f, err := os.Open(path)
@@ -97,7 +145,7 @@ func showSnapshot(paths []string, lines int, q Query, out *printer) {
 		var info os.FileInfo
 		var err error
 		if strings.HasSuffix(strings.ToLower(p), ".gz") {
-			ls, info, err = readAllLogLines(p, 0)
+			ls, info, err = readAllLogLines(p, maxFollowReadBytes)
 			if len(ls) > max(lines*4, lines) {
 				ls = ls[len(ls)-max(lines*4, lines):]
 			}
@@ -139,8 +187,10 @@ func (f *follower) addPath(path string, announce bool) {
 	}
 	lines, off, info, err := readLastLines(path, f.cfg.Lines)
 	if err != nil {
+		f.reportFailure(path, err)
 		return
 	}
+	f.clearFailure(path)
 	f.states[path] = &fileState{Path: path, Info: info, Offset: off}
 	if f.skipInitial {
 		return
@@ -156,10 +206,22 @@ func (f *follower) addPath(path string, announce bool) {
 func (f *follower) rescan() {
 	paths, err := resolvePatterns(f.patterns, f.excludes)
 	if err != nil {
+		f.reportFailure("log source scan", err)
 		return
 	}
+	f.clearFailure("log source scan")
 	for _, p := range paths {
 		f.addPath(p, true)
+	}
+	active := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		active[p] = true
+	}
+	for path := range f.states {
+		if !active[path] {
+			delete(f.states, path)
+			f.clearFailure(path)
+		}
 	}
 }
 
@@ -214,53 +276,42 @@ func (f *follower) poll() {
 	for path, st := range f.states {
 		info, err := os.Stat(path)
 		if err != nil {
+			f.reportFailure(path, err)
 			continue
 		}
+		f.clearFailure(path)
 		if st.Info != nil && !os.SameFile(st.Info, info) {
 			lines, off, ni, e := readLastLines(path, f.cfg.Lines)
 			if e == nil {
-				st.Info, st.Offset, st.Carry = ni, off, ""
+				st.Info, st.Offset, st.Carry, st.CarryTruncated = ni, off, "", false
 				st.Prev = nil
 				st.Seq, st.LastEmittedSeq, st.AfterRemaining = 0, 0, 0
 				st.Pending = append(st.Pending, "↻ file rotated/replaced")
 				st.Pending = append(st.Pending, f.streamFilter(st, lines)...)
 			}
+			if e != nil {
+				f.reportFailure(path, e)
+			}
 			continue
 		}
 		if info.Size() < st.Offset {
 			st.Offset = 0
-			st.Carry = ""
+			st.Carry, st.CarryTruncated = "", false
 			st.Pending = append(st.Pending, "↻ file truncated")
 		}
 		if info.Size() == st.Offset {
 			st.Info = info
 			continue
 		}
-		file, err := os.Open(path)
+		b, err := readAppended(path, st.Offset, maxFollowReadBytes)
 		if err != nil {
-			continue
-		}
-		if _, err := file.Seek(st.Offset, io.SeekStart); err != nil {
-			file.Close()
-			continue
-		}
-		r := bufio.NewReader(file)
-		b, err := io.ReadAll(r)
-		file.Close()
-		if err != nil {
+			f.reportFailure(path, err)
 			continue
 		}
 		st.Offset += int64(len(b))
 		st.Info = info
-		text := st.Carry + string(b)
-		parts := strings.Split(text, "\n")
-		if !strings.HasSuffix(text, "\n") {
-			st.Carry = parts[len(parts)-1]
-			parts = parts[:len(parts)-1]
-		} else {
-			st.Carry = ""
-			parts = parts[:len(parts)-1]
-		}
+		parts, carry, carryTruncated := splitAppended(st.Carry, st.CarryTruncated, b)
+		st.Carry, st.CarryTruncated = carry, carryTruncated
 		st.Pending = append(st.Pending, f.streamFilter(st, parts)...)
 		if len(st.Pending) > f.cfg.MaxBufferLines {
 			drop := len(st.Pending) - f.cfg.MaxBufferLines

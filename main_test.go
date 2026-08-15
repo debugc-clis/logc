@@ -28,3 +28,13 @@ func TestParseCLIRejectsRemovedNoFollowFlag(t *testing.T) {
 		t.Fatal("parseCLI accepted removed --no-follow flag")
 	}
 }
+
+func TestParseCLIRecognizesJSON(t *testing.T) {
+	opts, err := parseCLI([]string{"--json", "ERROR"}, defaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !opts.JSON || len(opts.Positionals) != 1 || opts.Positionals[0] != "ERROR" {
+		t.Fatalf("options=%#v", opts)
+	}
+}

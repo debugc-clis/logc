@@ -28,6 +28,10 @@ func hasDockerFollow(args []string) bool {
 }
 
 func dockerCommand(args []string) int {
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
+		fmt.Fprintln(os.Stderr, "logc: usage: logc docker [docker logs options] CONTAINER")
+		return 0
+	}
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "logc: usage: logc docker [docker logs options] CONTAINER")
 		return 2

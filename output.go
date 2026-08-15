@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -8,7 +9,10 @@ import (
 	"time"
 )
 
-type printer struct{ color bool }
+type printer struct {
+	color bool
+	json  bool
+}
 
 var (
 	fatalLevel = regexp.MustCompile(`(?i)\b(fatal|panic|critical|severe|exception|traceback)\b`)
@@ -62,6 +66,15 @@ func (p *printer) decorate(line string) string {
 }
 
 func (p *printer) block(path string, lines []string, suffix string) {
+	if p.json {
+		_ = json.NewEncoder(os.Stdout).Encode(struct {
+			Path   string   `json:"path"`
+			Time   string   `json:"time"`
+			Suffix string   `json:"suffix,omitempty"`
+			Lines  []string `json:"lines"`
+		}{Path: path, Time: time.Now().Format(time.RFC3339), Suffix: suffix, Lines: lines})
+		return
+	}
 	fmt.Println()
 	fmt.Println(p.header(path, suffix))
 	if len(lines) == 0 {

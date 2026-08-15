@@ -2,70 +2,35 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ['v*']
 
 permissions:
   contents: write
 
 jobs:
-  test:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22.x"
-      - run: go test ./...
-
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.22.x"
-      - name: Build archive
+          go-version: '1.22.x'
+      - name: Build archives
         env:
           VERSION: ${{ github.ref_name }}
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
         run: |
-          set -eux
-          archive="logc_${VERSION}_${GOOS}_${GOARCH}"
-          mkdir -p "package/${archive}" dist
-          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "package/${archive}/logc" .
-          tar -C package -czf "dist/${archive}.tar.gz" "${archive}"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: logc-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/*.tar.gz
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-      - name: Create checksums
-        working-directory: dist
-        run: sha256sum *.tar.gz > checksums.txt
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${target%/*}
+            arch=${target#*/}
+            name="logc_${VERSION}_${os}_${arch}"
+            mkdir -p "dist/${name}"
+            GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "dist/${name}/logc" .
+            tar -C dist -czf "dist/${name}.tar.gz" "$name"
+            rm -rf "dist/${name}"
+          done
+          sha256sum dist/*.tar.gz > dist/checksums.txt
       - uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/*.tar.gz
-            dist/checksums.txt
+          generate_release_notes: true
+          files: dist/*

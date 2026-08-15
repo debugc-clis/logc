@@ -13,7 +13,12 @@ import (
 	"time"
 )
 
-const alertRateWindow = time.Minute
+const (
+	alertRateWindow      = time.Minute
+	maxAlertGroups       = 200
+	maxAlertEvents       = 100_000
+	maxRenderedAlertRows = 20
+)
 
 type alertSummary struct {
 	Source string
@@ -24,8 +29,9 @@ type alertSummary struct {
 }
 
 type alertTracker struct {
-	alerts map[string]*alertSummary
-	events []time.Time
+	alerts     map[string]*alertSummary
+	events     []time.Time
+	rateCapped bool
 }
 
 func newAlertTracker() *alertTracker {
@@ -36,13 +42,31 @@ func (t *alertTracker) add(source, line string, at time.Time) {
 	key := source + "\x00" + line
 	alert := t.alerts[key]
 	if alert == nil {
+		if len(t.alerts) >= maxAlertGroups {
+			t.evictOldestAlert()
+		}
 		alert = &alertSummary{Source: source, Line: line, First: at}
 		t.alerts[key] = alert
 	}
 	alert.Count++
 	alert.Last = at
-	t.events = append(t.events, at)
+	if len(t.events) < maxAlertEvents {
+		t.events = append(t.events, at)
+	} else {
+		t.rateCapped = true
+	}
 	t.prune(at)
+}
+
+func (t *alertTracker) evictOldestAlert() {
+	var oldestKey string
+	var oldest time.Time
+	for key, alert := range t.alerts {
+		if oldestKey == "" || alert.Last.Before(oldest) {
+			oldestKey, oldest = key, alert.Last
+		}
+	}
+	delete(t.alerts, oldestKey)
 }
 
 func (t *alertTracker) prune(now time.Time) {
@@ -53,6 +77,9 @@ func (t *alertTracker) prune(now time.Time) {
 	}
 	if first > 0 {
 		t.events = append([]time.Time(nil), t.events[first:]...)
+	}
+	if len(t.events) < maxAlertEvents {
+		t.rateCapped = false
 	}
 }
 
@@ -78,14 +105,26 @@ type alertWatcher struct {
 	query    Query
 	states   map[string]*fileState
 	tracker  *alertTracker
+	failures map[string]string
 }
 
 func newAlertWatcher(cfg Config, patterns, excludes []string, query Query) *alertWatcher {
 	return &alertWatcher{
 		cfg: cfg, patterns: patterns, excludes: excludes, query: query,
-		states: map[string]*fileState{}, tracker: newAlertTracker(),
+		states: map[string]*fileState{}, tracker: newAlertTracker(), failures: map[string]string{},
 	}
 }
+
+func (w *alertWatcher) reportFailure(path string, err error) {
+	message := err.Error()
+	if w.failures[path] == message {
+		return
+	}
+	w.failures[path] = message
+	fmt.Fprintf(os.Stderr, "logc watch: skipping %s: %v\n", path, err)
+}
+
+func (w *alertWatcher) clearFailure(path string) { delete(w.failures, path) }
 
 func (w *alertWatcher) observe(path string, lines []string, at time.Time) {
 	for _, line := range lines {
@@ -112,8 +151,10 @@ func (w *alertWatcher) addPath(path string) {
 	}
 	lines, offset, info, err := readLastLines(path, w.cfg.Lines)
 	if err != nil {
+		w.reportFailure(path, err)
 		return
 	}
+	w.clearFailure(path)
 	w.states[path] = &fileState{Path: path, Info: info, Offset: offset}
 	w.observe(path, lines, time.Now())
 }
@@ -121,10 +162,22 @@ func (w *alertWatcher) addPath(path string) {
 func (w *alertWatcher) rescan() {
 	paths, err := resolvePatterns(w.patterns, w.excludes)
 	if err != nil {
+		w.reportFailure("log source scan", err)
 		return
 	}
+	w.clearFailure("log source scan")
 	for _, path := range paths {
 		w.addPath(path)
+	}
+	active := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		active[path] = true
+	}
+	for path := range w.states {
+		if !active[path] {
+			delete(w.states, path)
+			w.clearFailure(path)
+		}
 	}
 }
 
@@ -132,45 +185,37 @@ func (w *alertWatcher) poll() {
 	for path, state := range w.states {
 		info, err := os.Stat(path)
 		if err != nil {
+			w.reportFailure(path, err)
 			continue
 		}
+		w.clearFailure(path)
 		if state.Info != nil && !os.SameFile(state.Info, info) {
 			lines, offset, nextInfo, err := readLastLines(path, w.cfg.Lines)
 			if err == nil {
-				state.Info, state.Offset, state.Carry = nextInfo, offset, ""
+				state.Info, state.Offset, state.Carry, state.CarryTruncated = nextInfo, offset, "", false
 				w.observe(path, lines, time.Now())
+			}
+			if err != nil {
+				w.reportFailure(path, err)
 			}
 			continue
 		}
 		if info.Size() < state.Offset {
-			state.Offset, state.Carry = 0, ""
+			state.Offset, state.Carry, state.CarryTruncated = 0, "", false
 		}
 		if info.Size() == state.Offset {
 			state.Info = info
 			continue
 		}
-		file, err := os.Open(path)
+		data, err := readAppended(path, state.Offset, maxFollowReadBytes)
 		if err != nil {
-			continue
-		}
-		if _, err := file.Seek(state.Offset, io.SeekStart); err != nil {
-			_ = file.Close()
-			continue
-		}
-		data, err := io.ReadAll(file)
-		_ = file.Close()
-		if err != nil {
+			w.reportFailure(path, err)
 			continue
 		}
 		state.Offset += int64(len(data))
 		state.Info = info
-		text := state.Carry + string(data)
-		parts := strings.Split(text, "\n")
-		if strings.HasSuffix(text, "\n") {
-			state.Carry, parts = "", parts[:len(parts)-1]
-		} else {
-			state.Carry, parts = parts[len(parts)-1], parts[:len(parts)-1]
-		}
+		parts, carry, carryTruncated := splitAppended(state.Carry, state.CarryTruncated, data)
+		state.Carry, state.CarryTruncated = carry, carryTruncated
 		w.observe(path, parts, time.Now())
 	}
 }
@@ -182,11 +227,19 @@ func (w *alertWatcher) render(out io.Writer, color, clear bool) {
 		fmt.Fprint(out, "\x1b[H\x1b[2J")
 	}
 	fmt.Fprintf(out, "logc watch %q  [%s]\n", w.query.Pattern, now.Format("15:04:05"))
-	fmt.Fprintf(out, "%d alert groups · %d events/min · %d sources\n\n", len(alerts), rate, len(w.states))
+	rateLabel := fmt.Sprintf("%d", rate)
+	if w.tracker.rateCapped {
+		rateLabel += "+"
+	}
+	fmt.Fprintf(out, "%d alert groups · %s events/min · %d sources\n\n", len(alerts), rateLabel, len(w.states))
 	if len(alerts) == 0 {
 		fmt.Fprintln(out, "No matching events yet. Watching for new lines…")
 	} else {
 		fmt.Fprintln(out, "COUNT  FIRST     LAST      SOURCE                 ALERT")
+		if len(alerts) > maxRenderedAlertRows {
+			fmt.Fprintf(out, "Showing the %d most recent groups.\n", maxRenderedAlertRows)
+			alerts = alerts[:maxRenderedAlertRows]
+		}
 		for _, alert := range alerts {
 			line := alert.Line
 			if color {
@@ -237,6 +290,10 @@ func watchCommand(args []string) int {
 	opts, err := parseCLI(args, cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "logc watch:", err)
+		return 2
+	}
+	if opts.JSON {
+		fmt.Fprintln(os.Stderr, "logc watch: --json is not supported; use the terminal dashboard")
 		return 2
 	}
 	resolved, pattern, err := resolveWatchArgs(cfg, opts.Positionals, opts.Match)

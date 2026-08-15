@@ -47,7 +47,7 @@ func defaultConfigForPlatform(goos, osRelease string) Config {
 		Lines:          10,
 		MaxFiles:       20,
 		FlushInterval:  500 * time.Millisecond,
-		ScanInterval:   1 * time.Second,
+		ScanInterval:   5 * time.Second,
 		MaxBatchLines:  10,
 		MaxBufferLines: 2000,
 		Recent:         24 * time.Hour,
@@ -192,7 +192,9 @@ func loadConfig() (Config, error) {
 
 		switch k {
 		case "default_log_dir":
-			if strings.HasPrefix(v, "!") {
+			if v == "!" {
+				cfg.DefaultLogDirs = nil
+			} else if strings.HasPrefix(v, "!") {
 				cfg.DefaultLogDirs = removeString(cfg.DefaultLogDirs, expandHome(strings.TrimPrefix(v, "!")))
 			} else {
 				cfg.DefaultLogDirs = appendUnique(cfg.DefaultLogDirs, expandHome(v))
@@ -306,7 +308,7 @@ lines=10
 max_files=20
 recent=24h
 flush_interval=500ms
-scan_interval=1s
+scan_interval=5s
 max_batch_lines=10
 max_buffer_lines=2000
 color=true

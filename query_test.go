@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -58,6 +59,32 @@ func TestGzipReader(t *testing.T) {
 	}
 	if len(lines) != 2 || lines[1] != "ERROR old" {
 		t.Fatalf("got %#v", lines)
+	}
+}
+
+func TestGzipReaderHonorsReadLimit(t *testing.T) {
+	d := t.TempDir()
+	p := filepath.Join(d, "large.log.gz")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(f)
+	if _, err := gz.Write([]byte(strings.Repeat("x", 4096))); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lines, _, err := readAllLogLines(p, 128)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || len(lines[0]) != 128 {
+		t.Fatalf("lines=%d length=%d", len(lines), len(lines[0]))
 	}
 }
 

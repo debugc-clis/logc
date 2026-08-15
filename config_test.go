@@ -89,6 +89,22 @@ func TestConfigCanOverrideBuiltInSystemLogExclusion(t *testing.T) {
 	}
 }
 
+func TestConfigCanResetDefaultLogDirectories(t *testing.T) {
+	d := t.TempDir()
+	p := filepath.Join(d, "logc.conf")
+	if err := os.WriteFile(p, []byte("default_log_dir=!\ndefault_log_dir=/srv/logs\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LOGC_CONFIG", p)
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.DefaultLogDirs) != 1 || cfg.DefaultLogDirs[0] != "/srv/logs" {
+		t.Fatalf("default dirs: %#v", cfg.DefaultLogDirs)
+	}
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

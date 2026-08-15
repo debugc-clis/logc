@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,6 +19,14 @@ type ResolvedTarget struct {
 	Patterns    []string
 	Paths       []string
 	JournalUnit string
+}
+
+const selectorCommandTimeout = 2 * time.Second
+
+func selectorOutput(path string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), selectorCommandTimeout)
+	defer cancel()
+	return exec.CommandContext(ctx, path, args...).Output()
 }
 
 func looksLikePath(s string) bool {
@@ -212,8 +221,7 @@ func discoverProcessLogs(name string) []string {
 
 func pidForPort(port int) int {
 	if path, err := exec.LookPath("lsof"); err == nil {
-		cmd := exec.Command(path, "-nP", "-t", "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN")
-		b, _ := cmd.Output()
+		b, _ := selectorOutput(path, "-nP", "-t", "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN")
 		if fields := strings.Fields(string(b)); len(fields) > 0 {
 			if pid, e := strconv.Atoi(fields[0]); e == nil {
 				return pid
@@ -222,8 +230,7 @@ func pidForPort(port int) int {
 	}
 	if runtime.GOOS == "linux" {
 		if path, err := exec.LookPath("ss"); err == nil {
-			cmd := exec.Command(path, "-ltnp", "sport = :"+strconv.Itoa(port))
-			b, _ := cmd.Output()
+			b, _ := selectorOutput(path, "-ltnp", "sport = :"+strconv.Itoa(port))
 			s := bufio.NewScanner(strings.NewReader(string(b)))
 			for s.Scan() {
 				line := s.Text()
@@ -250,8 +257,7 @@ func systemdUnitExists(unit string) bool {
 	if err != nil {
 		return false
 	}
-	cmd := exec.Command(path, "show", "-p", "LoadState", "--value", unit)
-	b, err := cmd.Output()
+	b, err := selectorOutput(path, "show", "-p", "LoadState", "--value", unit)
 	if err != nil {
 		return false
 	}

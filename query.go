@@ -106,11 +106,15 @@ func readAllLogLines(path string, maxBytes int64) ([]string, os.FileInfo, error)
 	}
 	defer r.Close()
 	var reader io.Reader = r
-	if maxBytes > 0 && !strings.HasSuffix(strings.ToLower(path), ".gz") && fi.Size() > maxBytes {
-		f, ok := r.(*os.File)
-		if ok {
-			_, _ = f.Seek(fi.Size()-maxBytes, io.SeekStart)
-			reader = f
+	if maxBytes > 0 {
+		if !strings.HasSuffix(strings.ToLower(path), ".gz") && fi.Size() > maxBytes {
+			f, ok := r.(*os.File)
+			if ok {
+				_, _ = f.Seek(fi.Size()-maxBytes, io.SeekStart)
+				reader = f
+			}
+		} else {
+			reader = io.LimitReader(reader, maxBytes)
 		}
 	}
 	s := bufio.NewScanner(reader)

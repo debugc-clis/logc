@@ -58,6 +58,7 @@ SMALL SET OF OPTIONAL FLAGS
   -n N                Initial lines per file (default 10)
   --dedup             Collapse consecutive duplicate lines
   --no-color          Disable colors
+  --json              Emit one JSON object per log block
   --current           Search only active logs; skip rotated/.gz files
   -m REGEX            Explicit match regex (normally just use the second positional argument)
 
@@ -83,6 +84,7 @@ type cliOptions struct {
 	Lines       int
 	Dedup       bool
 	NoColor     bool
+	JSON        bool
 	CurrentOnly bool
 	Match       string
 	Excludes    []string
@@ -135,6 +137,8 @@ func parseCLI(args []string, cfg Config) (cliOptions, error) {
 			o.Dedup = true
 		case "--no-color":
 			o.NoColor = true
+		case "--json":
+			o.JSON = true
 		case "--current":
 			o.CurrentOnly = true
 		case "-m", "--match":
@@ -217,7 +221,7 @@ func realMain() int {
 		case "docker":
 			return dockerCommand(os.Args[2:])
 		case "ls", "list":
-			return listCommand()
+			return listCommand(os.Args[2:])
 		case "where":
 			return whereCommand(os.Args[2:])
 		}
@@ -234,10 +238,11 @@ func realMain() int {
 		return 2
 	}
 	cfg.Lines = opts.Lines
-	cfg.Color = cfg.Color && !opts.NoColor
+	cfg.Color = cfg.Color && !opts.NoColor && !opts.JSON
 	excludes := append(append([]string(nil), cfg.Excludes...), opts.Excludes...)
 	cfg.Excludes = excludes
 	out := newPrinter(cfg.Color)
+	out.json = opts.JSON
 	since, err := parseSince(opts.SinceRaw)
 	if err != nil {
 		out.errorf("%v", err)
@@ -399,7 +404,10 @@ func looksLikeSearchExpression(s string) bool {
 	case "error", "errors", "warn", "warning", "warnings":
 		return true
 	}
-	return strings.ContainsAny(s, "|()^$+{}\\")
+	if strings.ContainsAny(s, "|()^$+{}\\") {
+		return true
+	}
+	return strings.ContainsAny(s, "[]") && !strings.ContainsAny(s, "/\\")
 }
 
 func resolveLeadingTargets(cfg Config, pos []string, includeHistory bool) (ResolvedTarget, int, error) {
@@ -454,6 +462,9 @@ func configCommand(args []string) int {
 		return 0
 	}
 	switch args[0] {
+	case "-h", "--help", "help":
+		fmt.Fprintln(os.Stderr, "logc: usage: logc config {init [--force]|path|show}")
+		return 0
 	case "path":
 		fmt.Println(configPath())
 		return 0
@@ -466,7 +477,11 @@ func configCommand(args []string) int {
 		printConfig(cfg)
 		return 0
 	case "init":
-		force := len(args) > 1 && args[1] == "--force"
+		if len(args) > 2 || (len(args) == 2 && args[1] != "--force") {
+			fmt.Fprintln(os.Stderr, "logc: usage: logc config init [--force]")
+			return 2
+		}
+		force := len(args) == 2
 		if err := writeDefaultConfig(force); err != nil {
 			fmt.Fprintln(os.Stderr, "logc:", err)
 			return 1
@@ -489,6 +504,9 @@ func systemCommand(args []string) int {
 	lines := max(cfg.Lines, 50)
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
+		case "-h", "--help", "help":
+			fmt.Fprintln(os.Stderr, "logc: usage: logc system [--kernel] [-n LINES]")
+			return 0
 		case "--kernel", "kernel":
 			kernel = true
 		case "-n", "--lines":
@@ -516,7 +534,11 @@ func systemCommand(args []string) int {
 	return 0
 }
 
-func listCommand() int {
+func listCommand(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "logc: usage: logc ls")
+		return 2
+	}
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "logc:", err)

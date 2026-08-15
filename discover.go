@@ -150,6 +150,9 @@ func resolvePatternsWithHistory(patterns []string, excludes []string, includeHis
 	}
 	for _, raw := range patterns {
 		p := expandHome(raw)
+		if filepath.Clean(literalRoot(p)) == string(filepath.Separator) {
+			return nil, fmt.Errorf("refusing to recursively scan filesystem root")
+		}
 		if !hasMeta(p) {
 			fi, err := os.Stat(p)
 			if err != nil {

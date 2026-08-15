@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -34,6 +35,17 @@ func TestAlertTrackerPrunesEventsOutsideRateWindow(t *testing.T) {
 	_, rate := tracker.summaries(now)
 	if rate != 1 {
 		t.Fatalf("rate=%d, want 1", rate)
+	}
+}
+
+func TestAlertTrackerBoundsUniqueGroups(t *testing.T) {
+	tracker := newAlertTracker()
+	now := time.Date(2026, time.August, 13, 10, 0, 0, 0, time.Local)
+	for i := 0; i < maxAlertGroups+1; i++ {
+		tracker.add("/srv/api.log", fmt.Sprintf("ERROR request=%d", i), now.Add(time.Duration(i)*time.Second))
+	}
+	if len(tracker.alerts) != maxAlertGroups {
+		t.Fatalf("groups=%d, want %d", len(tracker.alerts), maxAlertGroups)
 	}
 }
 

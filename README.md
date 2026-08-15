@@ -62,6 +62,8 @@ For a user-local install managed by Go instead, run:
 go install .
 ```
 
+Pushing a `v*` tag publishes Linux and macOS archives with SHA-256 checksums to GitHub Releases.
+
 ## Common Workflows
 
 ### Find the right source
@@ -91,6 +93,7 @@ logc ERROR                         # Search default application logs.
 logc api error -i -C 3 --since 2h
 logc api ERROR --dedup
 logc api ERROR --current            # Skip rotated and .gz history.
+logc api ERROR --json | jq           # One JSON object per source block.
 ```
 
 The expression is a Go-compatible regular expression. Searches include matching rotated and `.gz` logs by default; `--current` restricts the result to active files. `ERROR`, `errors`, `WARN`, and `warnings` are severity shortcuts.
@@ -159,6 +162,10 @@ default_log_dir=/var/log
 default_log_dir=/opt/var/log
 default_log_dir=/srv
 
+# To use only custom roots, reset the built-in list first.
+# default_log_dir=!
+# default_log_dir=/srv/logs
+
 # Add custom exclusions. Prefix an exact built-in pattern with ! to remove it.
 exclude=/srv/**/debug*.log
 # exclude=!/var/log/syslog*
@@ -179,13 +186,20 @@ lines=10
 max_files=20
 recent=24h
 flush_interval=500ms
-scan_interval=1s
+scan_interval=5s
 max_batch_lines=10
 max_buffer_lines=2000
 color=true
 ```
 
 On Linux, logc detects the distribution from `/etc/os-release` and excludes distribution-specific system-log paths from default application-log discovery. Use `logc system` for operating-system logs, or `logc config show` to inspect the active patterns.
+
+## Operational Limits
+
+- `logc` is read-only, but access to host, container, and system logs still depends on the current user's permissions.
+- Recursive filesystem-root scans are refused. Keep source groups and glob roots narrow; new files are rescanned every five seconds by default.
+- Follow and watch modes cap each per-file read at 4 MiB and truncate an unterminated line after 2 MiB to protect the host during high-volume incidents.
+- `watch` retains at most 200 distinct alert groups and renders the 20 most recent groups.
 
 ## Roadmap
 
