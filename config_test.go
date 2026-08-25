@@ -69,6 +69,15 @@ func TestSystemLogExcludesUseLinuxDistribution(t *testing.T) {
 	}
 }
 
+func TestSystemLogExcludesMacOSNoise(t *testing.T) {
+	excludes := systemLogExcludes("darwin", "")
+	for _, pattern := range []string{"/var/log/system.log*", "/var/log/install.log*", "/var/log/com.apple.*/**"} {
+		if !containsString(excludes, pattern) {
+			t.Fatalf("macOS exclusions missing %q: %#v", pattern, excludes)
+		}
+	}
+}
+
 func TestConfigCanOverrideBuiltInSystemLogExclusion(t *testing.T) {
 	d := t.TempDir()
 	p := filepath.Join(d, "logc.conf")

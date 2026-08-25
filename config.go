@@ -70,6 +70,12 @@ func systemLogExcludes(goos, osRelease string) []string {
 	common := []string{
 		"/var/log/journal/**", "/var/log/audit/**",
 	}
+	if goos == "darwin" {
+		return append(common,
+			"/var/log/system.log*", "/var/log/install.log*", "/var/log/fsck_*.log*",
+			"/var/log/com.apple.*/**", "/var/log/powermanagement/**", "/var/log/wifi.log*",
+		)
+	}
 	if goos != "linux" {
 		return common
 	}

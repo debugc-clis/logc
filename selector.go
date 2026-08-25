@@ -269,7 +269,16 @@ func listSources(cfg Config) []sourceSummary {
 	byDir := map[string]*sourceSummary{}
 	for name, pats := range cfg.Groups {
 		paths, _ := resolvePatternsWithHistory(pats, cfg.Excludes, false)
-		byDir["group:"+name] = &sourceSummary{Name: name, Paths: paths, Kind: "group"}
+		summary := &sourceSummary{Name: name, Paths: paths, Kind: "group"}
+		if len(pats) > 0 {
+			summary.Root = pats[0]
+		}
+		for _, path := range paths {
+			if info, err := os.Stat(path); err == nil && info.ModTime().After(summary.Latest) {
+				summary.Latest = info.ModTime()
+			}
+		}
+		byDir["group:"+name] = summary
 	}
 	cs := collectLogCandidates(cfg.DefaultLogDirs, cfg.Excludes, timeZero, false)
 	for _, c := range cs {
@@ -280,6 +289,9 @@ func listSources(cfg Config) []sourceSummary {
 			byDir[key] = &sourceSummary{Name: name, Kind: "auto", Root: dir}
 		}
 		byDir[key].Paths = append(byDir[key].Paths, c.Path)
+		if c.ModTime.After(byDir[key].Latest) {
+			byDir[key].Latest = c.ModTime
+		}
 	}
 	out := make([]sourceSummary, 0, len(byDir))
 	for _, v := range byDir {
@@ -304,4 +316,5 @@ var timeZero = func() (z time.Time) { return }()
 type sourceSummary struct {
 	Name, Kind, Root string
 	Paths            []string
+	Latest           time.Time
 }

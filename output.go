@@ -40,9 +40,9 @@ func (p *printer) header(path, suffix string) string {
 		meta += " · " + suffix
 	}
 	if p.color {
-		return fmt.Sprintf("\x1b[1;36m%s\x1b[0m \x1b[2m[%s]\x1b[0m", path, meta)
+		return fmt.Sprintf("\x1b[1;36m%s\x1b[0m \x1b[2m[shown %s]\x1b[0m", path, meta)
 	}
-	return fmt.Sprintf("%s [%s]", path, meta)
+	return fmt.Sprintf("%s [shown %s]", path, meta)
 }
 
 func (p *printer) decorate(line string) string {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"syscall"
@@ -20,9 +21,17 @@ const (
 	maxRenderedAlertRows = 20
 )
 
+var (
+	alertTimestampPrefix = regexp.MustCompile(`^\s*(?:\d{4}[-/]\d{2}[-/]\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?|[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s*`)
+	alertUUID            = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b`)
+	alertLongHex         = regexp.MustCompile(`(?i)\b(?:0x)?[0-9a-f]{12,}\b`)
+	alertDynamicField    = regexp.MustCompile(`(?i)\b(request_id|trace_id|span_id|correlation_id|transaction_id|job_id|task_id)=\S+`)
+)
+
 type alertSummary struct {
 	Source string
 	Line   string
+	Key    string
 	Count  int
 	First  time.Time
 	Last   time.Time
@@ -39,15 +48,17 @@ func newAlertTracker() *alertTracker {
 }
 
 func (t *alertTracker) add(source, line string, at time.Time) {
-	key := source + "\x00" + line
+	signature := normalizeAlertLine(line)
+	key := source + "\x00" + signature
 	alert := t.alerts[key]
 	if alert == nil {
 		if len(t.alerts) >= maxAlertGroups {
 			t.evictOldestAlert()
 		}
-		alert = &alertSummary{Source: source, Line: line, First: at}
+		alert = &alertSummary{Source: source, Line: line, Key: signature, First: at}
 		t.alerts[key] = alert
 	}
+	alert.Line = line
 	alert.Count++
 	alert.Last = at
 	if len(t.events) < maxAlertEvents {
@@ -56,6 +67,14 @@ func (t *alertTracker) add(source, line string, at time.Time) {
 		t.rateCapped = true
 	}
 	t.prune(at)
+}
+
+func normalizeAlertLine(line string) string {
+	line = alertTimestampPrefix.ReplaceAllString(strings.TrimSpace(line), "")
+	line = alertDynamicField.ReplaceAllString(line, "$1=<id>")
+	line = alertUUID.ReplaceAllString(line, "<id>")
+	line = alertLongHex.ReplaceAllString(line, "<id>")
+	return strings.Join(strings.Fields(line), " ")
 }
 
 func (t *alertTracker) evictOldestAlert() {

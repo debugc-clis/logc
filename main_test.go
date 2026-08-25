@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestShouldFollowDefaultsToTrue(t *testing.T) {
 	tests := []struct {
@@ -36,5 +39,23 @@ func TestParseCLIRecognizesJSON(t *testing.T) {
 	}
 	if !opts.JSON || len(opts.Positionals) != 1 || opts.Positionals[0] != "ERROR" {
 		t.Fatalf("options=%#v", opts)
+	}
+}
+
+func TestFormatAge(t *testing.T) {
+	now := time.Now()
+	for _, test := range []struct {
+		at   time.Time
+		want string
+	}{
+		{time.Time{}, "-"},
+		{now.Add(-30 * time.Second), "30s"},
+		{now.Add(-5 * time.Minute), "5m"},
+		{now.Add(-2 * time.Hour), "2h"},
+		{now.Add(-3 * 24 * time.Hour), "3d"},
+	} {
+		if got := formatAgeAt(test.at, now); got != test.want {
+			t.Fatalf("formatAge(%s)=%q, want %q", test.at, got, test.want)
+		}
 	}
 }

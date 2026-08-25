@@ -60,3 +60,14 @@ func TestLikelyLogDoesNotMatchLoggConfig(t *testing.T) {
 		t.Fatal("app.log should be a log")
 	}
 }
+
+func TestListSourcesKeepsConfiguredPatternForInactiveGroup(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.DefaultLogDirs = nil
+	cfg.Groups = map[string][]string{"api": {"/srv/api/*.log"}}
+
+	sources := listSources(cfg)
+	if len(sources) != 1 || sources[0].Root != "/srv/api/*.log" || len(sources[0].Paths) != 0 {
+		t.Fatalf("sources=%#v", sources)
+	}
+}

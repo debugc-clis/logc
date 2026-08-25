@@ -49,6 +49,21 @@ func TestAlertTrackerBoundsUniqueGroups(t *testing.T) {
 	}
 }
 
+func TestAlertTrackerGroupsDynamicRequestIDs(t *testing.T) {
+	tracker := newAlertTracker()
+	now := time.Date(2026, time.August, 25, 10, 0, 0, 0, time.Local)
+	tracker.add("/srv/api.log", "2026-08-25 10:00:00 ERROR request_id=req-100 upstream timeout", now)
+	tracker.add("/srv/api.log", "2026-08-25 10:00:01 ERROR request_id=req-101 upstream timeout", now.Add(time.Second))
+
+	alerts, rate := tracker.summaries(now.Add(time.Second))
+	if rate != 2 || len(alerts) != 1 || alerts[0].Count != 2 {
+		t.Fatalf("alerts=%#v rate=%d", alerts, rate)
+	}
+	if alerts[0].Key != "ERROR request_id=<id> upstream timeout" {
+		t.Fatalf("key=%q", alerts[0].Key)
+	}
+}
+
 func TestWatchLineEligibleHonorsSince(t *testing.T) {
 	since := time.Date(2026, time.August, 13, 10, 0, 0, 0, time.Local)
 	query := Query{Since: since}

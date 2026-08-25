@@ -75,6 +75,8 @@ logc /srv/api/log          # Follow all supported logs in a directory.
 logc '/srv/**/logs/*.log'  # Follow a recursive glob and discover new files.
 ```
 
+`logc ls` includes the latest activity age for each source, making it easier to choose the relevant service during an incident.
+
 Configure memorable names when paths are inconvenient:
 
 ```ini
@@ -132,7 +134,7 @@ Use Docker's native flags exactly as you would with `docker logs`; place options
 
 ### Watch live alerts
 
-`logc watch` aggregates matching events instead of printing every line. It refreshes once per second with the event rate from the last minute, duplicate count, and first/last occurrence time.
+`logc watch` aggregates matching events instead of printing every line. It normalizes timestamps and common request/trace identifiers so repeated failures are counted together, then refreshes once per second with the event rate from the last minute and first/last occurrence time.
 
 ```bash
 logc watch ERROR

@@ -296,7 +296,7 @@ func realMain() int {
 
 	paths := uniqueSorted(resolved.Paths)
 	if len(paths) == 0 {
-		out.infof("no matching application logs found")
+		out.infof("no application logs found under the configured roots; run 'logc config show' or pass a file/directory")
 		return 0
 	}
 
@@ -549,15 +549,39 @@ func listCommand(args []string) int {
 		fmt.Println("no application log sources discovered")
 		return 0
 	}
-	fmt.Printf("%-22s %-7s %-7s %s\n", "NAME", "TYPE", "FILES", "LOCATION")
+	fmt.Printf("%-22s %-7s %-7s %-10s %s\n", "NAME", "TYPE", "FILES", "LATEST", "LOCATION")
 	for _, s := range sources {
 		root := s.Root
 		if root == "" && len(s.Paths) > 0 {
 			root = s.Paths[0]
 		}
-		fmt.Printf("%-22s %-7s %-7d %s\n", s.Name, s.Kind, len(s.Paths), root)
+		fmt.Printf("%-22s %-7s %-7d %-10s %s\n", s.Name, s.Kind, len(s.Paths), formatAge(s.Latest), root)
 	}
 	return 0
+}
+
+func formatAge(timestamp time.Time) string {
+	return formatAgeAt(timestamp, time.Now())
+}
+
+func formatAgeAt(timestamp, now time.Time) string {
+	if timestamp.IsZero() {
+		return "-"
+	}
+	age := now.Sub(timestamp)
+	if age < 0 {
+		age = 0
+	}
+	switch {
+	case age < time.Minute:
+		return fmt.Sprintf("%ds", int(age.Seconds()))
+	case age < time.Hour:
+		return fmt.Sprintf("%dm", int(age.Minutes()))
+	case age < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(age.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(age.Hours()/24))
+	}
 }
 
 func whereCommand(args []string) int {

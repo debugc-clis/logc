@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Group repeated watch alerts across changing timestamps and common request/trace identifiers.
+- Show source recency and configured patterns in `logc ls`.
+- Exclude common macOS system logs from default application-log discovery.
+- Label log block timestamps explicitly as render times and improve empty-discovery guidance.
+
 ## v0.2.0
 
 - Added natural `logc TARGET REGEX` search syntax.
