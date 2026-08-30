@@ -30,3 +30,11 @@ func TestPrinterLeavesLinesPlainWithoutColor(t *testing.T) {
 		t.Fatalf("decorate returned %q", got)
 	}
 }
+
+func TestPrinterSanitizesTerminalControlSequences(t *testing.T) {
+	printer := &printer{color: false}
+	input := "INFO before\x1b[2Jafter\x1b]52;c;clipboard\x07\x00"
+	if got := printer.decorate(input); got != "INFO beforeafter" {
+		t.Fatalf("decorate returned %q", got)
+	}
+}

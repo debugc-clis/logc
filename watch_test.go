@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -35,6 +36,18 @@ func TestAlertTrackerPrunesEventsOutsideRateWindow(t *testing.T) {
 	_, rate := tracker.summaries(now)
 	if rate != 1 {
 		t.Fatalf("rate=%d, want 1", rate)
+	}
+}
+
+func TestAlertTrackerPrunesOutOfOrderEvents(t *testing.T) {
+	tracker := newAlertTracker()
+	now := time.Date(2026, time.August, 13, 10, 0, 0, 0, time.Local)
+	tracker.add("/srv/api.log", "ERROR current", now.Add(-time.Second))
+	tracker.add("/srv/old.log", "ERROR old", now.Add(-2*time.Minute))
+	tracker.add("/srv/worker.log", "ERROR current", now.Add(-2*time.Second))
+	_, rate := tracker.summaries(now)
+	if rate != 2 {
+		t.Fatalf("rate=%d, want 2", rate)
 	}
 }
 
@@ -72,6 +85,45 @@ func TestWatchLineEligibleHonorsSince(t *testing.T) {
 	}
 	if !watchLineEligible("2026-08-13 10:00:01 ERROR current", since, query) {
 		t.Fatal("current timestamped line was rejected")
+	}
+}
+
+func TestAlertWatcherUsesEventTimestamp(t *testing.T) {
+	query, err := buildQuery("ERROR", false, time.Time{}, 0, 0, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	watcher := newAlertWatcher(defaultConfig(), nil, nil, nil, query)
+	eventTime := time.Date(2026, time.August, 13, 9, 55, 0, 0, time.Local)
+	watcher.observe("/srv/api.log", []string{"2026-08-13 09:55:00 ERROR timeout"}, eventTime.Add(5*time.Minute), time.Time{})
+	alerts, _ := watcher.tracker.summaries(eventTime.Add(5 * time.Minute))
+	if len(alerts) != 1 || !alerts[0].First.Equal(eventTime) || !alerts[0].Last.Equal(eventTime) {
+		t.Fatalf("alerts=%#v", alerts)
+	}
+}
+
+func TestAlertWatcherBootstrapsAllLinesSince(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "api.log")
+	var lines []string
+	for index := 0; index < 20; index++ {
+		lines = append(lines, fmt.Sprintf("2026-08-13 10:00:%02d ERROR failure", index))
+	}
+	for index := 0; index < 10; index++ {
+		lines = append(lines, fmt.Sprintf("2026-08-13 10:01:%02d INFO healthy", index))
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	query, err := buildQuery("ERROR", false, time.Date(2026, time.August, 13, 10, 0, 0, 0, time.Local), 0, 0, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	watcher := newAlertWatcher(defaultConfig(), []string{path}, nil, []string{path}, query)
+	watcher.bootstrap()
+	alerts, _ := watcher.tracker.summaries(time.Date(2026, time.August, 13, 10, 2, 0, 0, time.Local))
+	if len(alerts) != 1 || alerts[0].Count != 20 {
+		t.Fatalf("alerts=%#v", alerts)
 	}
 }
 

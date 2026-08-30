@@ -99,3 +99,64 @@ func TestParseSinceFriendlyDays(t *testing.T) {
 		t.Fatalf("unexpected 1d time: %v", got)
 	}
 }
+
+func TestParseYearlessSyslogTimestampAcrossNewYear(t *testing.T) {
+	now := time.Date(2027, time.January, 2, 10, 0, 0, 0, time.Local)
+	parsed, ok := parseTimePrefixAt("Dec 31 23:59:59 host app: message", now)
+	if !ok || parsed.Year() != 2026 {
+		t.Fatalf("parsed=%v ok=%t", parsed, ok)
+	}
+}
+
+func TestScanLogPathSearchesCompleteRegularAndGzipFiles(t *testing.T) {
+	directory := t.TempDir()
+	query, err := buildQuery("needle", false, time.Time{}, 0, 0, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	regular := filepath.Join(directory, "large.log")
+	padding := strings.Repeat("INFO "+strings.Repeat("x", 1018)+"\n", 17*1024)
+	if err := os.WriteFile(regular, []byte("ERROR needle-at-start\n"+padding), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lines, matches, err := scanLogPath(regular, query)
+	if err != nil || matches != 1 || len(lines) != 1 || !strings.Contains(lines[0], "needle-at-start") {
+		t.Fatalf("regular lines=%#v matches=%d err=%v", lines, matches, err)
+	}
+
+	compressed := filepath.Join(directory, "large.log.gz")
+	file, err := os.Create(compressed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gzipWriter := gzip.NewWriter(file)
+	if _, err := gzipWriter.Write([]byte(padding + "ERROR needle-at-end\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lines, matches, err = scanLogPath(compressed, query)
+	if err != nil || matches != 1 || len(lines) != 1 || !strings.Contains(lines[0], "needle-at-end") {
+		t.Fatalf("gzip lines=%#v matches=%d err=%v", lines, matches, err)
+	}
+}
+
+func TestScanLogPathCountsMatchesBeforeDedup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.log")
+	if err := os.WriteFile(path, []byte("ERROR repeated\nERROR repeated\nERROR repeated\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	query, err := buildQuery("ERROR", false, time.Time{}, 0, 0, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines, matches, err := scanLogPath(path, query)
+	if err != nil || matches != 3 || len(lines) != 3 {
+		t.Fatalf("lines=%#v matches=%d err=%v", lines, matches, err)
+	}
+}

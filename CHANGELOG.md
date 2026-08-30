@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Stream complete regular and gzip logs during search instead of silently limiting results to 16 MiB.
+- Bootstrap `watch --since` from complete matching history and use event timestamps for FIRST, LAST, and event-rate calculations.
+- Discover new default log files while following, support file symlinks and explicit extensionless files, and select files fairly across source directories.
+- Add source category/module metadata, stable auto-source IDs, `--category` and `--module` filters, and metadata in JSON output.
+- Report inaccessible roots, sanitize terminal control sequences, adapt polling for large source sets, and truncate long watch rows unless `--full` is used.
+- Apply regex, context, deduplication, highlighting, noise filters, and JSON rendering to system and Docker streams while preserving Docker option passthrough.
+- Support systemd units in the aggregated `logc watch` view.
+
 - Group repeated watch alerts across changing timestamps and common request/trace identifiers.
 - Show source recency and configured patterns in `logc ls`.
 - Exclude common macOS system logs from default application-log discovery.

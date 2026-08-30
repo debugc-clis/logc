@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestConfigGroupsAndIgnoreLines(t *testing.T) {
@@ -23,6 +25,23 @@ func TestConfigGroupsAndIgnoreLines(t *testing.T) {
 	}
 	if len(cfg.IgnoreLines) != 1 {
 		t.Fatalf("ignore lines: %#v", cfg.IgnoreLines)
+	}
+}
+
+func TestConfigGroupCategoryAndModule(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "logc.conf")
+	body := "[group.edge]\ncategory=network\nmodule=ingress\npath=/srv/edge/*.log\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LOGC_CONFIG", path)
+	config, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.GroupCategories["edge"] != "network" || config.GroupModules["edge"] != "ingress" {
+		t.Fatalf("categories=%#v modules=%#v", config.GroupCategories, config.GroupModules)
 	}
 }
 
@@ -111,6 +130,23 @@ func TestConfigCanResetDefaultLogDirectories(t *testing.T) {
 	}
 	if len(cfg.DefaultLogDirs) != 1 || cfg.DefaultLogDirs[0] != "/srv/logs" {
 		t.Fatalf("default dirs: %#v", cfg.DefaultLogDirs)
+	}
+}
+
+func TestFairDiscoveryKeepsMultipleSources(t *testing.T) {
+	now := time.Now()
+	var candidates []fileCandidate
+	for index := 0; index < 25; index++ {
+		candidates = append(candidates, fileCandidate{Path: filepath.Join("/logs/noisy", fmt.Sprintf("%d.log", index)), ModTime: now})
+	}
+	candidates = append(candidates, fileCandidate{Path: "/logs/payment/api.log", ModTime: now.Add(-time.Hour)})
+	selected := selectFairCandidates(candidates, 20)
+	foundPayment := false
+	for _, candidate := range selected {
+		foundPayment = foundPayment || candidate.Path == "/logs/payment/api.log"
+	}
+	if !foundPayment {
+		t.Fatalf("payment source was crowded out: %#v", selected)
 	}
 }
 

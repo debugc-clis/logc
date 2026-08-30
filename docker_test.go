@@ -22,3 +22,17 @@ func TestDockerLogsArgsPreservesExplicitFollow(t *testing.T) {
 		}
 	}
 }
+
+func TestParseDockerViewArgsKeepsDockerOptions(t *testing.T) {
+	forwarded, options, err := parseDockerViewArgs([]string{"--since", "30m", "--timestamps", "-m", "ERROR", "-C", "2", "api"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"--since", "30m", "--timestamps", "api"}
+	if !reflect.DeepEqual(forwarded, want) {
+		t.Fatalf("forwarded=%#v want=%#v", forwarded, want)
+	}
+	if options.match != severityPattern("ERROR") || options.context != 2 {
+		t.Fatalf("options=%#v", options)
+	}
+}

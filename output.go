@@ -10,8 +10,9 @@ import (
 )
 
 type printer struct {
-	color bool
-	json  bool
+	color      bool
+	json       bool
+	sourceMeta func(string) (string, string)
 }
 
 var (
@@ -34,6 +35,15 @@ func newPrinter(enabled bool) *printer {
 }
 
 func (p *printer) header(path, suffix string) string {
+	displayPath := path
+	if p.sourceMeta != nil {
+		category, module := p.sourceMeta(path)
+		if category != "" || module != "" {
+			displayPath = fmt.Sprintf("[%s/%s] %s", category, module, path)
+		}
+	}
+	path = sanitizeTerminalText(displayPath)
+	suffix = sanitizeTerminalText(suffix)
 	ts := time.Now().Format("15:04:05")
 	meta := ts
 	if suffix != "" {
@@ -46,6 +56,7 @@ func (p *printer) header(path, suffix string) string {
 }
 
 func (p *printer) decorate(line string) string {
+	line = sanitizeTerminalText(line)
 	if !p.color {
 		return line
 	}
@@ -65,14 +76,75 @@ func (p *printer) decorate(line string) string {
 	}
 }
 
+func sanitizeTerminalText(text string) string {
+	var safe strings.Builder
+	safe.Grow(len(text))
+	for index := 0; index < len(text); {
+		current := text[index]
+		if current == 0x1b {
+			index++
+			if index >= len(text) {
+				break
+			}
+			switch text[index] {
+			case '[':
+				index++
+				for index < len(text) {
+					final := text[index]
+					index++
+					if final >= 0x40 && final <= 0x7e {
+						break
+					}
+				}
+			case ']':
+				index++
+				for index < len(text) {
+					if text[index] == 0x07 {
+						index++
+						break
+					}
+					if text[index] == 0x1b && index+1 < len(text) && text[index+1] == '\\' {
+						index += 2
+						break
+					}
+					index++
+				}
+			default:
+				index++
+			}
+			continue
+		}
+		if current < 0x20 {
+			if current == '\t' {
+				safe.WriteByte(current)
+			}
+			index++
+			continue
+		}
+		if current == 0x7f {
+			index++
+			continue
+		}
+		safe.WriteByte(current)
+		index++
+	}
+	return safe.String()
+}
+
 func (p *printer) block(path string, lines []string, suffix string) {
 	if p.json {
+		category, module := "", ""
+		if p.sourceMeta != nil {
+			category, module = p.sourceMeta(path)
+		}
 		_ = json.NewEncoder(os.Stdout).Encode(struct {
-			Path   string   `json:"path"`
-			Time   string   `json:"time"`
-			Suffix string   `json:"suffix,omitempty"`
-			Lines  []string `json:"lines"`
-		}{Path: path, Time: time.Now().Format(time.RFC3339), Suffix: suffix, Lines: lines})
+			Path     string   `json:"path"`
+			Category string   `json:"category,omitempty"`
+			Module   string   `json:"module,omitempty"`
+			Time     string   `json:"time"`
+			Suffix   string   `json:"suffix,omitempty"`
+			Lines    []string `json:"lines"`
+		}{Path: path, Category: category, Module: module, Time: time.Now().Format(time.RFC3339), Suffix: suffix, Lines: lines})
 		return
 	}
 	fmt.Println()
@@ -92,8 +164,8 @@ func (p *printer) block(path string, lines []string, suffix string) {
 }
 
 func (p *printer) infof(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "logc: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "logc: %s\n", sanitizeTerminalText(fmt.Sprintf(format, args...)))
 }
 func (p *printer) errorf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "logc: error: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "logc: error: %s\n", sanitizeTerminalText(fmt.Sprintf(format, args...)))
 }

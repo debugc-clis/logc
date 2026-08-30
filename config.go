@@ -13,18 +13,20 @@ import (
 )
 
 type Config struct {
-	DefaultLogDirs []string
-	Excludes       []string
-	IgnoreLines    []string
-	Groups         map[string][]string
-	Lines          int
-	MaxFiles       int
-	FlushInterval  time.Duration
-	ScanInterval   time.Duration
-	MaxBatchLines  int
-	MaxBufferLines int
-	Recent         time.Duration
-	Color          bool
+	DefaultLogDirs  []string
+	Excludes        []string
+	IgnoreLines     []string
+	Groups          map[string][]string
+	GroupCategories map[string]string
+	GroupModules    map[string]string
+	Lines           int
+	MaxFiles        int
+	FlushInterval   time.Duration
+	ScanInterval    time.Duration
+	MaxBatchLines   int
+	MaxBufferLines  int
+	Recent          time.Duration
+	Color           bool
 }
 
 func defaultConfig() Config {
@@ -44,14 +46,16 @@ func defaultConfigForPlatform(goos, osRelease string) Config {
 				"/opt/homebrew/var/mysql/*.log", "/opt/homebrew/var/mysql/*.err",
 			},
 		},
-		Lines:          10,
-		MaxFiles:       20,
-		FlushInterval:  500 * time.Millisecond,
-		ScanInterval:   5 * time.Second,
-		MaxBatchLines:  10,
-		MaxBufferLines: 2000,
-		Recent:         24 * time.Hour,
-		Color:          true,
+		GroupCategories: map[string]string{"mysql": "database"},
+		GroupModules:    map[string]string{"mysql": "mysql"},
+		Lines:           10,
+		MaxFiles:        20,
+		FlushInterval:   500 * time.Millisecond,
+		ScanInterval:    5 * time.Second,
+		MaxBatchLines:   10,
+		MaxBufferLines:  2000,
+		Recent:          24 * time.Hour,
+		Color:           true,
 	}
 }
 
@@ -183,9 +187,27 @@ func loadConfig() (Config, error) {
 			return cfg, fmt.Errorf("%s:%d: expected key=value", p, lineNo)
 		}
 		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
-		if sectionGroup != "" && k == "path" {
-			cfg.Groups[sectionGroup] = appendUnique(cfg.Groups[sectionGroup], expandHome(v))
-			continue
+		if sectionGroup != "" {
+			handled := true
+			switch k {
+			case "path":
+				cfg.Groups[sectionGroup] = appendUnique(cfg.Groups[sectionGroup], expandHome(v))
+			case "category":
+				if !validSourceLabel(v) {
+					return cfg, fmt.Errorf("%s:%d: invalid category", p, lineNo)
+				}
+				cfg.GroupCategories[sectionGroup] = strings.ToLower(v)
+			case "module":
+				if !validSourceLabel(v) {
+					return cfg, fmt.Errorf("%s:%d: invalid module", p, lineNo)
+				}
+				cfg.GroupModules[sectionGroup] = v
+			default:
+				handled = false
+			}
+			if handled {
+				continue
+			}
 		}
 		if strings.HasPrefix(k, "group.") {
 			name := strings.TrimSpace(strings.TrimPrefix(k, "group."))
@@ -308,6 +330,8 @@ exclude=/var/log/dmesg*
 # group.mysql=/srv/mysql/log/*.log
 # group.api=/srv/api/log/*.log
 # [group.payment]
+# category=app
+# module=payment
 # path=/srv/payment/**/*.log
 
 lines=10
@@ -339,12 +363,33 @@ func printConfig(cfg Config) {
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		fmt.Printf("[group.%s]\n", name)
+		if category := cfg.GroupCategories[name]; category != "" {
+			fmt.Printf("category=%s\n", category)
+		}
+		if module := cfg.GroupModules[name]; module != "" {
+			fmt.Printf("module=%s\n", module)
+		}
 		for _, p := range cfg.Groups[name] {
-			fmt.Printf("group.%s=%s\n", name, p)
+			fmt.Printf("path=%s\n", p)
 		}
 	}
 	fmt.Printf("lines=%d\nmax_files=%d\nrecent=%s\nflush_interval=%s\nscan_interval=%s\nmax_batch_lines=%d\nmax_buffer_lines=%d\ncolor=%t\n",
 		cfg.Lines, cfg.MaxFiles, cfg.Recent, cfg.FlushInterval, cfg.ScanInterval, cfg.MaxBatchLines, cfg.MaxBufferLines, cfg.Color)
+}
+
+func validSourceLabel(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, char := range value {
+		letter := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z'
+		if letter || index > 0 && (char >= '0' && char <= '9' || char == '-' || char == '_') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func appendUnique(xs []string, v string) []string {

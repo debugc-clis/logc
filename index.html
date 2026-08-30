@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>logc: SRE Log CLI for Finding, Searching & Following Logs</title>
+  <title>logc: SRE Log CLI for Finding, Searching &amp; Following Logs</title>
   <meta name="description" content="logc is a free, open-source SRE CLI for discovering, searching, and following local application and system logs on Linux and macOS." />
   <meta name="author" content="logc contributors" />
   <meta name="application-name" content="logc" />
@@ -349,7 +349,7 @@
           <div class="hero-copy">
             <div class="eyebrow">SRE-native log CLI</div>
             <h1>One command <span>for logs.</span></h1>
-            <p>Find, search, and follow logs without remembering paths or chaining <span class="mono">tail</span>, <span class="mono">grep</span>, <span class="mono">find</span>, and <span class="mono">journalctl</span>. Built for SREs, always free, and open source.</p>
+            <p>Discover, classify, search, and follow local application, system, database, web, network, and container logs without remembering paths or chaining <span class="mono">tail</span>, <span class="mono">grep</span>, <span class="mono">find</span>, and <span class="mono">journalctl</span>. Humans keep control of the diagnosis.</p>
             <div class="hero-install-row">
               <div class="hero-install-wrap" id="install">
                 <div class="hero-install">
@@ -376,22 +376,22 @@
             <div class="terminal-body">
 <pre><span class="prompt">$</span> <span class="cmd">logc</span>
 
-<span class="path">/srv/api/log/app.log</span> <span class="dim">(3 matches)</span>
+<span class="path">[app/api] /srv/api/log/app.log</span> <span class="dim">[shown 13:49:12]</span>
 2026-08-08 13:47:32  <span class="info">INFO </span> [http]  request_id=8f1a9  GET /v1/users 200 34ms
 2026-08-08 13:48:03  <span class="warn">WARN </span> [db]    slow query detected 512ms
 2026-08-08 13:49:11  <span class="err">ERROR</span> [http]  request_id=8f1aa  upstream timeout after 30s
 2026-08-08 13:49:12  <span class="info">INFO </span> [retry] retrying request_id=8f1aa attempt=1
 <span class="ok">-- following -- (press Ctrl+C to stop)</span>
 
-<span class="path">/srv/api/log/app.log.1.gz</span> <span class="dim">(2 matches)</span>
-2026-08-08 13:35:21  <span class="warn">WARN </span> [cache] connection reset by peer
-2026-08-08 13:36:45  <span class="err">ERROR</span> [http]  request_id=8f199 upstream timeout after 30s
+<span class="path">[app/worker] /srv/worker/log/worker.log</span> <span class="dim">[shown 13:49:12]</span>
+2026-08-08 13:48:42  <span class="info">INFO </span> job=invoice-882 picked_up
+2026-08-08 13:49:02  <span class="warn">WARN </span> queue_depth=842 threshold=800
 
-<span class="path">/var/log/journal/3b8f.../system.journal</span> <span class="dim">(1 match)</span>
-2026-08-08 13:42:02  <span class="warn">WARN </span> systemd[1]: api.service: Main process exited,
-                                   code=exited, status=1/FAILURE</pre>
+<span class="path">[web/nginx] /var/log/nginx/access.log</span> <span class="dim">[shown 13:49:12]</span>
+10.0.2.14 - GET /api/payments 200 42ms
+10.0.2.18 - POST /api/payments 201 218ms</pre>
               <div class="statusline">
-                <span>3 files · 6 matches · since 30m · following</span>
+                <span>3 active files · fairly aggregated · following</span>
                 <span class="ok">(live) ●</span>
               </div>
             </div>
@@ -533,18 +533,11 @@ request_id=9c8a0
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc @nginx
 
-Process: nginx (PID 1542)
-User: www-data
-Resolved sources:
- • /var/log/nginx/access.log
- • /var/log/nginx/error.log
- • journald: _COMM=nginx
-
-<span class="path">/var/log/nginx/error.log</span>
+<span class="path">[web/nginx] /var/log/nginx/error.log</span>
 14:20:59 <span class="err">ERROR</span> connect() failed
           (111: Connection refused)
 
-<span class="dim">3 sources · following</span></pre>
+<span class="dim">resolved from the nginx process · following</span></pre>
             </div>
           </article>
 

@@ -23,17 +23,19 @@ type streamLine struct {
 }
 
 type fileState struct {
-	Path           string
-	Info           os.FileInfo
-	Offset         int64
-	Carry          string
-	CarryTruncated bool
-	Pending        []string
-	Dropped        int
-	Seq            int64
-	Prev           []streamLine
-	LastEmittedSeq int64
-	AfterRemaining int
+	Path            string
+	Info            os.FileInfo
+	Offset          int64
+	Carry           string
+	CarryTruncated  bool
+	Pending         []string
+	Dropped         int
+	Seq             int64
+	Prev            []streamLine
+	LastEmittedSeq  int64
+	AfterRemaining  int
+	DedupLast       string
+	DedupSuppressed int
 }
 
 func readAppended(path string, offset, limit int64) ([]byte, error) {
@@ -68,15 +70,18 @@ func splitAppended(carry string, carryTruncated bool, data []byte) (lines []stri
 }
 
 type follower struct {
-	cfg         Config
-	patterns    []string
-	excludes    []string
-	out         *printer
-	query       Query
-	skipInitial bool
-	mu          sync.Mutex
-	states      map[string]*fileState
-	failures    map[string]string
+	cfg              Config
+	patterns         []string
+	excludes         []string
+	out              *printer
+	query            Query
+	skipInitial      bool
+	defaultDiscovery bool
+	categories       []string
+	modules          []string
+	mu               sync.Mutex
+	states           map[string]*fileState
+	failures         map[string]string
 }
 
 func newFollower(cfg Config, patterns []string, excludes []string, out *printer, q Query, skipInitial bool) *follower {
@@ -93,6 +98,15 @@ func (f *follower) reportFailure(path string, err error) {
 }
 
 func (f *follower) clearFailure(path string) { delete(f.failures, path) }
+
+func (f *follower) reportWarning(message string) {
+	key := "warning:" + message
+	if f.failures[key] == message {
+		return
+	}
+	f.failures[key] = message
+	f.out.infof("warning: %s", message)
+}
 
 func readLastLines(path string, n int) ([]string, int64, os.FileInfo, error) {
 	f, err := os.Open(path)
@@ -204,10 +218,13 @@ func (f *follower) addPath(path string, announce bool) {
 }
 
 func (f *follower) rescan() {
-	paths, err := resolvePatterns(f.patterns, f.excludes)
+	paths, warnings, err := f.resolvePaths()
 	if err != nil {
 		f.reportFailure("log source scan", err)
 		return
+	}
+	for _, warning := range warnings {
+		f.reportWarning(warning)
 	}
 	f.clearFailure("log source scan")
 	for _, p := range paths {
@@ -223,6 +240,15 @@ func (f *follower) rescan() {
 			f.clearFailure(path)
 		}
 	}
+}
+
+func (f *follower) resolvePaths() ([]string, []string, error) {
+	if f.defaultDiscovery {
+		paths, warnings, err := discoverDefaultDetailed(f.cfg)
+		return filterSourcePaths(f.cfg, paths, f.categories, f.modules), warnings, err
+	}
+	paths, err := resolvePatterns(f.patterns, f.excludes)
+	return filterSourcePaths(f.cfg, paths, f.categories, f.modules), nil, err
 }
 
 func (f *follower) streamFilter(st *fileState, parts []string) []string {
@@ -264,10 +290,36 @@ func (f *follower) streamFilter(st *fileState, parts []string) []string {
 			}
 		}
 	}
-	if f.query.Dedup {
-		out = dedupLines(out)
+	return dedupStreamLines(st, out, f.query.Dedup)
+}
+
+func dedupStreamLines(state *fileState, lines []string, enabled bool) []string {
+	if !enabled {
+		return lines
 	}
-	return out
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if line == state.DedupLast {
+			state.DedupSuppressed++
+			continue
+		}
+		if state.DedupSuppressed > 0 {
+			filtered = append(filtered, fmt.Sprintf("↳ previous line repeated %d additional times", state.DedupSuppressed))
+			state.DedupSuppressed = 0
+		}
+		filtered = append(filtered, line)
+		state.DedupLast = line
+	}
+	return filtered
+}
+
+func takeStreamDedupSummary(state *fileState) (string, bool) {
+	if state.DedupSuppressed == 0 {
+		return "", false
+	}
+	summary := fmt.Sprintf("↳ previous line repeated %d additional times", state.DedupSuppressed)
+	state.DedupSuppressed = 0
+	return summary, true
 }
 
 func (f *follower) poll() {
@@ -286,6 +338,7 @@ func (f *follower) poll() {
 				st.Info, st.Offset, st.Carry, st.CarryTruncated = ni, off, "", false
 				st.Prev = nil
 				st.Seq, st.LastEmittedSeq, st.AfterRemaining = 0, 0, 0
+				st.DedupLast, st.DedupSuppressed = "", 0
 				st.Pending = append(st.Pending, "↻ file rotated/replaced")
 				st.Pending = append(st.Pending, f.streamFilter(st, lines)...)
 			}
@@ -324,6 +377,13 @@ func (f *follower) poll() {
 func (f *follower) flushFair() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.query.Dedup {
+		for _, state := range f.states {
+			if summary, ok := takeStreamDedupSummary(state); ok {
+				state.Pending = append(state.Pending, summary)
+			}
+		}
+	}
 	paths := make([]string, 0, len(f.states))
 	for p, st := range f.states {
 		if len(st.Pending) > 0 {
@@ -352,12 +412,18 @@ func (f *follower) flushFair() {
 }
 
 func (f *follower) run(ctx context.Context) {
-	if paths, err := resolvePatterns(f.patterns, f.excludes); err == nil {
+	if paths, _, err := f.resolvePaths(); err == nil {
 		for _, p := range paths {
 			f.addPath(p, false)
 		}
 	}
-	pollTicker := time.NewTicker(250 * time.Millisecond)
+	pollInterval := 250 * time.Millisecond
+	if len(f.states) > 500 {
+		pollInterval = time.Second
+	} else if len(f.states) > 100 {
+		pollInterval = 500 * time.Millisecond
+	}
+	pollTicker := time.NewTicker(pollInterval)
 	flushTicker := time.NewTicker(f.cfg.FlushInterval)
 	scanTicker := time.NewTicker(f.cfg.ScanInterval)
 	defer pollTicker.Stop()

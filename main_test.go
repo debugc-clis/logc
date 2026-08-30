@@ -42,6 +42,16 @@ func TestParseCLIRecognizesJSON(t *testing.T) {
 	}
 }
 
+func TestParseCLIRecognizesSourceFiltersAndFullRows(t *testing.T) {
+	options, err := parseCLI([]string{"--category", "app,web", "--module", "payment", "--full", "ERROR"}, defaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options.Categories) != 1 || options.Categories[0] != "app,web" || len(options.Modules) != 1 || options.Modules[0] != "payment" || !options.Full {
+		t.Fatalf("options=%#v", options)
+	}
+}
+
 func TestFormatAge(t *testing.T) {
 	now := time.Now()
 	for _, test := range []struct {

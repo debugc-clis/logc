@@ -25,9 +25,9 @@ USAGE
   logc REGEX                   Search all default application logs
   logc TARGET REGEX -f         Search existing logs, then keep following matching lines
   logc watch REGEX [TARGET...] Show a real-time aggregated alert view
-  logc system                  Follow operating-system logs
+  logc system [REGEX]          Search/highlight and follow operating-system logs
   logc docker [OPTIONS] NAME   Follow a Docker container's logs
-  logc ls                      Discover available local log sources
+  logc ls [FILTERS]            Discover classified local log sources
   logc where TARGET            Show what a target resolves to
 
 EXAMPLES
@@ -49,6 +49,9 @@ EXAMPLES
   logc :8080
   logc docker --tail 100 api
   logc docker --since 30m --timestamps api
+  logc system ERROR --since 30m
+  logc ls --category web
+  logc --category app,web ERROR
 
 SMALL SET OF OPTIONAL FLAGS
   -f                  Keep following after a search
@@ -60,6 +63,9 @@ SMALL SET OF OPTIONAL FLAGS
   --no-color          Disable colors
   --json              Emit one JSON object per log block
   --current           Search only active logs; skip rotated/.gz files
+  --category LIST     Filter sources by category, e.g. app,web,network
+  --module LIST       Filter configured source modules
+  --full              Do not truncate long rows in logc watch
   -m REGEX            Explicit match regex (normally just use the second positional argument)
 
 CONFIG
@@ -86,8 +92,11 @@ type cliOptions struct {
 	NoColor     bool
 	JSON        bool
 	CurrentOnly bool
+	Full        bool
 	Match       string
 	Excludes    []string
+	Categories  []string
+	Modules     []string
 	Positionals []string
 }
 
@@ -141,6 +150,8 @@ func parseCLI(args []string, cfg Config) (cliOptions, error) {
 			o.JSON = true
 		case "--current":
 			o.CurrentOnly = true
+		case "--full":
+			o.Full = true
 		case "-m", "--match":
 			v, err := next()
 			if err != nil {
@@ -153,6 +164,18 @@ func parseCLI(args []string, cfg Config) (cliOptions, error) {
 				return o, err
 			}
 			o.Excludes = append(o.Excludes, v)
+		case "--category":
+			v, err := next()
+			if err != nil {
+				return o, err
+			}
+			o.Categories = append(o.Categories, v)
+		case "--module":
+			v, err := next()
+			if err != nil {
+				return o, err
+			}
+			o.Modules = append(o.Modules, v)
 		case "--":
 			o.Positionals = append(o.Positionals, args[i+1:]...)
 			return o, nil
@@ -242,6 +265,7 @@ func realMain() int {
 	excludes := append(append([]string(nil), cfg.Excludes...), opts.Excludes...)
 	cfg.Excludes = excludes
 	out := newPrinter(cfg.Color)
+	out.sourceMeta = func(path string) (string, string) { return sourceMetadata(cfg, path) }
 	out.json = opts.JSON
 	since, err := parseSince(opts.SinceRaw)
 	if err != nil {
@@ -270,6 +294,9 @@ func realMain() int {
 			}
 		}
 	}
+	for _, warning := range uniqueSorted(resolved.Warnings) {
+		out.infof("warning: %s", warning)
+	}
 	q, err := buildQuery(queryPattern, opts.IgnoreCase, since, opts.Context, opts.Context, opts.Dedup, cfg.IgnoreLines)
 	if err != nil {
 		out.errorf("%v", err)
@@ -294,7 +321,10 @@ func realMain() int {
 		return 0
 	}
 
-	paths := uniqueSorted(resolved.Paths)
+	paths := uniqueSorted(filterSourcePaths(cfg, resolved.Paths, opts.Categories, opts.Modules))
+	if len(paths) > 1000 {
+		out.infof("warning: following %d files may increase filesystem polling load", len(paths))
+	}
 	if len(paths) == 0 {
 		out.infof("no application logs found under the configured roots; run 'logc config show' or pass a file/directory")
 		return 0
@@ -322,6 +352,8 @@ func realMain() int {
 		fq := q
 		fq.Since = time.Time{}
 		f := newFollower(cfg, activePaths, excludes, out, fq, true)
+		f.defaultDiscovery = resolved.DefaultDiscovery
+		f.categories, f.modules = opts.Categories, opts.Modules
 		f.run(ctx)
 		return 0
 	}
@@ -339,6 +371,8 @@ func realMain() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	f := newFollower(cfg, patterns, excludes, out, q, false)
+	f.defaultDiscovery = resolved.DefaultDiscovery
+	f.categories, f.modules = opts.Categories, opts.Modules
 	f.run(ctx)
 	return 0
 }
@@ -428,9 +462,12 @@ func resolveLeadingTargets(cfg Config, pos []string, includeHistory bool) (Resol
 		}
 		combined.Paths = append(combined.Paths, r.Paths...)
 		combined.Patterns = append(combined.Patterns, r.Patterns...)
+		combined.Warnings = append(combined.Warnings, r.Warnings...)
+		combined.DefaultDiscovery = combined.DefaultDiscovery || r.DefaultDiscovery
 	}
 	combined.Paths = uniqueSorted(combined.Paths)
 	combined.Patterns = uniqueSorted(combined.Patterns)
+	combined.Warnings = uniqueSorted(combined.Warnings)
 	return combined, len(pos), nil
 }
 
@@ -501,32 +538,45 @@ func systemCommand(args []string) int {
 		return 1
 	}
 	kernel := false
-	lines := max(cfg.Lines, 50)
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "-h", "--help", "help":
-			fmt.Fprintln(os.Stderr, "logc: usage: logc system [--kernel] [-n LINES]")
-			return 0
-		case "--kernel", "kernel":
+	filteredArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--kernel" || arg == "kernel" {
 			kernel = true
-		case "-n", "--lines":
-			if i+1 >= len(args) {
-				return 2
-			}
-			i++
-			n, e := strconv.Atoi(args[i])
-			if e != nil || n < 1 {
-				return 2
-			}
-			lines = n
-		default:
-			fmt.Fprintln(os.Stderr, "logc system: unknown option", args[i])
-			return 2
+			continue
 		}
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fmt.Fprintln(os.Stderr, "logc: usage: logc system [REGEX] [--kernel] [--since DURATION] [-n LINES] [-i] [-C N] [--dedup] [--json]")
+			return 0
+		}
+		filteredArgs = append(filteredArgs, arg)
 	}
+	opts, err := parseCLI(filteredArgs, cfg)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "logc system:", err)
+		return 2
+	}
+	pattern := opts.Match
+	if pattern == "" && len(opts.Positionals) > 0 {
+		pattern = strings.Join(opts.Positionals, " ")
+	}
+	pattern = severityPattern(pattern)
+	since, err := parseSince(opts.SinceRaw)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "logc system:", err)
+		return 2
+	}
+	query, err := buildQuery(pattern, opts.IgnoreCase, since, opts.Context, opts.Context, opts.Dedup, cfg.IgnoreLines)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "logc system:", err)
+		return 2
+	}
+	lines := max(opts.Lines, 50)
+	out := newPrinter(cfg.Color && !opts.NoColor && !opts.JSON)
+	out.sourceMeta = func(string) (string, string) { return "system", "host" }
+	out.json = opts.JSON
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	err = runSystemLogs(ctx, lines, kernel)
+	err = runSystemLogsFiltered(ctx, lines, kernel, query, out)
 	if err != nil && ctx.Err() == nil {
 		fmt.Fprintln(os.Stderr, "logc system:", err)
 		return 1
@@ -535,27 +585,58 @@ func systemCommand(args []string) int {
 }
 
 func listCommand(args []string) int {
-	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "logc: usage: logc ls")
-		return 2
+	var categories, modules []string
+	for index := 0; index < len(args); index++ {
+		switch args[index] {
+		case "--category", "--module":
+			if index+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "logc: usage: logc ls [--category LIST] [--module LIST]")
+				return 2
+			}
+			value := args[index+1]
+			index++
+			if args[index-1] == "--category" {
+				categories = append(categories, value)
+			} else {
+				modules = append(modules, value)
+			}
+		default:
+			fmt.Fprintln(os.Stderr, "logc: usage: logc ls [--category LIST] [--module LIST]")
+			return 2
+		}
 	}
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "logc:", err)
 		return 1
 	}
-	sources := listSources(cfg)
+	sources, warnings := listSourcesDetailed(cfg)
+	for _, warning := range warnings {
+		fmt.Fprintln(os.Stderr, "logc: warning:", sanitizeTerminalText(warning))
+	}
+	wantedCategories, wantedModules := stringSet(categories), stringSet(modules)
+	filtered := sources[:0]
+	for _, source := range sources {
+		if len(wantedCategories) > 0 && !wantedCategories[strings.ToLower(source.Category)] {
+			continue
+		}
+		if len(wantedModules) > 0 && !wantedModules[strings.ToLower(source.Module)] {
+			continue
+		}
+		filtered = append(filtered, source)
+	}
+	sources = filtered
 	if len(sources) == 0 {
 		fmt.Println("no application log sources discovered")
 		return 0
 	}
-	fmt.Printf("%-22s %-7s %-7s %-10s %s\n", "NAME", "TYPE", "FILES", "LATEST", "LOCATION")
+	fmt.Printf("%-28s %-10s %-14s %-7s %-7s %-10s %s\n", "ID", "CATEGORY", "MODULE", "TYPE", "FILES", "LATEST", "LOCATION")
 	for _, s := range sources {
 		root := s.Root
 		if root == "" && len(s.Paths) > 0 {
 			root = s.Paths[0]
 		}
-		fmt.Printf("%-22s %-7s %-7d %-10s %s\n", s.Name, s.Kind, len(s.Paths), formatAge(s.Latest), root)
+		fmt.Printf("%-28s %-10s %-14s %-7s %-7d %-10s %s\n", sanitizeTerminalText(s.ID), sanitizeTerminalText(s.Category), sanitizeTerminalText(s.Module), s.Kind, len(s.Paths), formatAge(s.Latest), sanitizeTerminalText(root))
 	}
 	return 0
 }
@@ -604,7 +685,7 @@ func whereCommand(args []string) int {
 		return 0
 	}
 	for _, p := range uniqueSorted(r.Paths) {
-		fmt.Println(p)
+		fmt.Println(sanitizeTerminalText(p))
 	}
 	return 0
 }

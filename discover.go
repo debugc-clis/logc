@@ -16,6 +16,11 @@ type fileCandidate struct {
 	Size    int64
 }
 
+type discoveryResult struct {
+	Candidates []fileCandidate
+	Warnings   []string
+}
+
 func excluded(path string, patterns []string) bool {
 	abs, _ := filepath.Abs(path)
 	for _, p := range patterns {
@@ -64,16 +69,36 @@ func historicalLog(path string) bool {
 }
 
 func collectLogCandidates(roots, excludes []string, cutoff time.Time, includeHistory bool) []fileCandidate {
+	return collectLogCandidatesDetailed(roots, excludes, cutoff, includeHistory).Candidates
+}
+
+func collectLogCandidatesDetailed(roots, excludes []string, cutoff time.Time, includeHistory bool) discoveryResult {
 	seen := map[string]bool{}
+	warningSeen := map[string]bool{}
 	var cs []fileCandidate
+	var warnings []string
+	warn := func(path string, err error) {
+		message := fmt.Sprintf("cannot scan %s: %v", path, err)
+		if !warningSeen[message] {
+			warningSeen[message] = true
+			warnings = append(warnings, message)
+		}
+	}
 	for _, root := range roots {
 		root = expandHome(root)
 		info, err := os.Stat(root)
-		if err != nil || !info.IsDir() {
+		if err != nil {
+			if !os.IsNotExist(err) {
+				warn(root, err)
+			}
+			continue
+		}
+		if !info.IsDir() {
 			continue
 		}
 		_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
+				warn(path, err)
 				if d != nil && d.IsDir() {
 					return filepath.SkipDir
 				}
@@ -85,7 +110,7 @@ func collectLogCandidates(roots, excludes []string, cutoff time.Time, includeHis
 				}
 				return nil
 			}
-			if d.IsDir() || d.Type()&os.ModeSymlink != 0 {
+			if d.IsDir() {
 				return nil
 			}
 			if !likelyLog(path) {
@@ -94,8 +119,12 @@ func collectLogCandidates(roots, excludes []string, cutoff time.Time, includeHis
 			if !includeHistory && historicalLog(path) {
 				return nil
 			}
-			fi, err := d.Info()
-			if err != nil || !fi.Mode().IsRegular() {
+			fi, err := os.Stat(path)
+			if err != nil {
+				warn(path, err)
+				return nil
+			}
+			if !fi.Mode().IsRegular() {
 				return nil
 			}
 			if !cutoff.IsZero() && fi.ModTime().Before(cutoff) {
@@ -115,19 +144,64 @@ func collectLogCandidates(roots, excludes []string, cutoff time.Time, includeHis
 		}
 		return cs[i].ModTime.After(cs[j].ModTime)
 	})
-	return cs
+	return discoveryResult{Candidates: cs, Warnings: warnings}
 }
 
 func discoverDefault(cfg Config) ([]string, error) {
-	cs := collectLogCandidates(cfg.DefaultLogDirs, cfg.Excludes, time.Now().Add(-cfg.Recent), false)
-	if len(cs) > cfg.MaxFiles {
-		cs = cs[:cfg.MaxFiles]
-	}
+	paths, _, err := discoverDefaultDetailed(cfg)
+	return paths, err
+}
+
+func discoverDefaultDetailed(cfg Config) ([]string, []string, error) {
+	result := collectLogCandidatesDetailed(cfg.DefaultLogDirs, cfg.Excludes, time.Now().Add(-cfg.Recent), false)
+	cs := selectFairCandidates(result.Candidates, cfg.MaxFiles)
 	out := make([]string, 0, len(cs))
 	for _, c := range cs {
 		out = append(out, c.Path)
 	}
-	return out, nil
+	return out, result.Warnings, nil
+}
+
+func selectFairCandidates(candidates []fileCandidate, limit int) []fileCandidate {
+	if limit <= 0 || len(candidates) <= limit {
+		return candidates
+	}
+	buckets := map[string][]fileCandidate{}
+	var directories []string
+	for _, candidate := range candidates {
+		directory := filepath.Dir(candidate.Path)
+		if _, exists := buckets[directory]; !exists {
+			directories = append(directories, directory)
+		}
+		buckets[directory] = append(buckets[directory], candidate)
+	}
+	sort.Slice(directories, func(i, j int) bool {
+		left, right := buckets[directories[i]][0], buckets[directories[j]][0]
+		if left.ModTime.Equal(right.ModTime) {
+			return directories[i] < directories[j]
+		}
+		return left.ModTime.After(right.ModTime)
+	})
+
+	selected := make([]fileCandidate, 0, limit)
+	for round := 0; len(selected) < limit; round++ {
+		added := false
+		for _, directory := range directories {
+			bucket := buckets[directory]
+			if round >= len(bucket) {
+				continue
+			}
+			selected = append(selected, bucket[round])
+			added = true
+			if len(selected) == limit {
+				break
+			}
+		}
+		if !added {
+			break
+		}
+	}
+	return selected
 }
 
 func resolvePatterns(patterns []string, excludes []string) ([]string, error) {
@@ -139,7 +213,7 @@ func resolvePatternsWithHistory(patterns []string, excludes []string, includeHis
 	var out []string
 	add := func(path string, explicit bool) {
 		abs, _ := filepath.Abs(path)
-		if excluded(abs, excludes) || seen[abs] || !likelyLog(abs) {
+		if excluded(abs, excludes) || seen[abs] || (!explicit && !likelyLog(abs)) {
 			return
 		}
 		if !explicit && !includeHistory && historicalLog(abs) {
@@ -169,7 +243,11 @@ func resolvePatternsWithHistory(patterns []string, excludes []string, includeHis
 						}
 						return nil
 					}
-					if d.IsDir() || !d.Type().IsRegular() {
+					if d.IsDir() {
+						return nil
+					}
+					info, statErr := os.Stat(path)
+					if statErr != nil || !info.Mode().IsRegular() {
 						return nil
 					}
 					add(path, false)
@@ -194,7 +272,11 @@ func resolvePatternsWithHistory(patterns []string, excludes []string, includeHis
 				}
 				return nil
 			}
-			if d.IsDir() || !d.Type().IsRegular() {
+			if d.IsDir() {
+				return nil
+			}
+			info, statErr := os.Stat(path)
+			if statErr != nil || !info.Mode().IsRegular() {
 				return nil
 			}
 			abs, _ := filepath.Abs(path)

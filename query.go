@@ -145,6 +145,10 @@ func lineTime(line string) (time.Time, bool) {
 }
 
 func parseTimePrefix(s string) (time.Time, bool) {
+	return parseTimePrefixAt(s, time.Now())
+}
+
+func parseTimePrefixAt(s string, now time.Time) (time.Time, bool) {
 	loc := time.Local
 	layouts := []struct {
 		layout string
@@ -164,7 +168,10 @@ func parseTimePrefix(s string) (time.Time, bool) {
 			part := strings.TrimSpace(s[:n])
 			if t, err := time.ParseInLocation(x.layout, part, loc); err == nil {
 				if x.layout == "Jan 02 15:04:05" {
-					t = time.Date(time.Now().Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, loc)
+					t = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, loc)
+					if t.After(now.Add(24 * time.Hour)) {
+						t = t.AddDate(-1, 0, 0)
+					}
 				}
 				return t, true
 			}
@@ -176,40 +183,120 @@ func parseTimePrefix(s string) (time.Time, bool) {
 func searchPaths(paths []string, q Query, out *printer) int {
 	total := 0
 	for _, path := range paths {
-		lines, fi, err := readAllLogLines(path, 16*1024*1024)
+		selected, matches, err := scanLogPath(path, q)
 		if err != nil {
 			out.errorf("%s: %v", path, err)
 			continue
 		}
-		selected := selectLines(lines, fi.ModTime(), q)
 		if len(selected) == 0 {
 			continue
 		}
 		if q.Dedup {
 			selected = dedupLines(selected)
 		}
-		out.block(path, selected, fmt.Sprintf("%d matches", countDirectMatches(selected, q)))
-		total += countDirectMatches(selected, q)
+		out.block(path, selected, fmt.Sprintf("%d matches", matches))
+		total += matches
 	}
 	return total
+}
+
+type indexedLogLine struct {
+	index    int
+	text     string
+	eligible bool
+}
+
+func scanLogPath(path string, q Query) ([]string, int, error) {
+	selected := make([]string, 0)
+	matches, err := scanLogPathEach(path, q, func(line string) {
+		selected = append(selected, line)
+	})
+	return selected, matches, err
+}
+
+func scanLogPathEach(path string, q Query, emit func(string)) (int, error) {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	reader, err := openLogReader(path)
+	if err != nil {
+		return 0, err
+	}
+	defer reader.Close()
+
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 64*1024), maxCarryBytes)
+	before := make([]indexedLogLine, 0, q.Before)
+	lastSelected := -2
+	afterRemaining := 0
+	matches := 0
+	lineIndex := 0
+
+	appendSelected := func(line indexedLogLine) {
+		if !line.eligible || line.index <= lastSelected {
+			return
+		}
+		if lastSelected >= 0 && line.index > lastSelected+1 {
+			emit("--")
+		}
+		emit(line.text)
+		lastSelected = line.index
+	}
+
+	for scanner.Scan() {
+		text := strings.TrimSuffix(scanner.Text(), "\r")
+		line := indexedLogLine{index: lineIndex, text: text, eligible: lineEligible(text, fileInfo.ModTime(), q)}
+		matched := line.eligible && q.match(text)
+
+		if q.Regex == nil {
+			if line.eligible {
+				appendSelected(line)
+				matches++
+			}
+		} else if matched {
+			matches++
+			for _, previous := range before {
+				appendSelected(previous)
+			}
+			appendSelected(line)
+			afterRemaining = q.After
+		} else if afterRemaining > 0 {
+			appendSelected(line)
+			afterRemaining--
+		}
+
+		if q.Before > 0 {
+			before = append(before, line)
+			if len(before) > q.Before {
+				before = before[len(before)-q.Before:]
+			}
+		}
+		lineIndex++
+	}
+	if err := scanner.Err(); err != nil {
+		return matches, err
+	}
+	return matches, nil
+}
+
+func lineEligible(line string, fileMod time.Time, q Query) bool {
+	if q.ignored(line) {
+		return false
+	}
+	if q.Since.IsZero() {
+		return true
+	}
+	if timestamp, ok := lineTime(line); ok {
+		return !timestamp.Before(q.Since)
+	}
+	return !fileMod.Before(q.Since)
 }
 
 func selectLines(lines []string, fileMod time.Time, q Query) []string {
 	eligible := make([]bool, len(lines))
 	for i, line := range lines {
-		if q.ignored(line) {
-			continue
-		}
-		if !q.Since.IsZero() {
-			if t, ok := lineTime(line); ok {
-				if t.Before(q.Since) {
-					continue
-				}
-			} else if fileMod.Before(q.Since) {
-				continue
-			}
-		}
-		eligible[i] = true
+		eligible[i] = lineEligible(line, fileMod, q)
 	}
 	if q.Regex == nil {
 		var out []string

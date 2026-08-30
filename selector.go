@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,10 +16,12 @@ import (
 )
 
 type ResolvedTarget struct {
-	Name        string
-	Patterns    []string
-	Paths       []string
-	JournalUnit string
+	Name             string
+	Patterns         []string
+	Paths            []string
+	JournalUnit      string
+	Warnings         []string
+	DefaultDiscovery bool
 }
 
 const selectorCommandTimeout = 2 * time.Second
@@ -36,22 +39,20 @@ func looksLikePath(s string) bool {
 func resolveTarget(cfg Config, raw string, includeHistory bool) (ResolvedTarget, error) {
 	if raw == "" {
 		if includeHistory {
-			cs := collectLogCandidates(cfg.DefaultLogDirs, cfg.Excludes, time.Time{}, true)
+			result := collectLogCandidatesDetailed(cfg.DefaultLogDirs, cfg.Excludes, time.Time{}, true)
 			limit := cfg.MaxFiles * 5
 			if limit < cfg.MaxFiles {
 				limit = cfg.MaxFiles
 			}
-			if len(cs) > limit {
-				cs = cs[:limit]
-			}
+			cs := selectFairCandidates(result.Candidates, limit)
 			paths := make([]string, 0, len(cs))
 			for _, c := range cs {
 				paths = append(paths, c.Path)
 			}
-			return ResolvedTarget{Name: "default", Paths: paths, Patterns: paths}, nil
+			return ResolvedTarget{Name: "default", Paths: paths, Patterns: cfg.DefaultLogDirs, Warnings: result.Warnings, DefaultDiscovery: true}, nil
 		}
-		paths, err := discoverDefault(cfg)
-		return ResolvedTarget{Name: "default", Paths: paths, Patterns: paths}, err
+		paths, warnings, err := discoverDefaultDetailed(cfg)
+		return ResolvedTarget{Name: "default", Paths: paths, Patterns: cfg.DefaultLogDirs, Warnings: warnings, DefaultDiscovery: true}, err
 	}
 	if pats, ok := cfg.Groups[raw]; ok {
 		paths, err := resolvePatternsWithHistory(pats, cfg.Excludes, includeHistory)
@@ -62,6 +63,11 @@ func resolveTarget(cfg Config, raw string, includeHistory bool) (ResolvedTarget,
 			paths = expandRotatedSiblings(paths, cfg.Excludes)
 		}
 		return ResolvedTarget{Name: raw, Patterns: pats, Paths: paths}, nil
+	}
+	if strings.Contains(raw, "/") && !filepath.IsAbs(raw) && !strings.HasPrefix(raw, ".") && !hasMeta(raw) {
+		if source, ok := sourceByID(cfg, raw); ok {
+			return ResolvedTarget{Name: source.ID, Patterns: []string{source.Root}, Paths: source.Paths}, nil
+		}
 	}
 	if strings.HasPrefix(raw, "@") {
 		name := strings.TrimPrefix(raw, "@")
@@ -120,20 +126,20 @@ func resolveTarget(cfg Config, raw string, includeHistory bool) (ResolvedTarget,
 func expandRotatedSiblings(paths, excludes []string) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(paths))
-	add := func(p string) {
+	add := func(p string, explicit bool) {
 		abs, _ := filepath.Abs(p)
 		if seen[abs] || excluded(abs, excludes) {
 			return
 		}
 		fi, err := os.Stat(abs)
-		if err != nil || !fi.Mode().IsRegular() || !likelyLog(abs) {
+		if err != nil || !fi.Mode().IsRegular() || (!explicit && !likelyLog(abs)) {
 			return
 		}
 		seen[abs] = true
 		out = append(out, abs)
 	}
 	for _, p := range paths {
-		add(p)
+		add(p, true)
 	}
 	for _, p := range paths {
 		dir, base := filepath.Dir(p), filepath.Base(p)
@@ -147,7 +153,7 @@ func expandRotatedSiblings(paths, excludes []string) []string {
 			}
 			name := ent.Name()
 			if strings.HasPrefix(name, base+".") || strings.HasPrefix(name, base+"-") {
-				add(filepath.Join(dir, name))
+				add(filepath.Join(dir, name), false)
 			}
 		}
 	}
@@ -266,10 +272,23 @@ func systemdUnitExists(unit string) bool {
 }
 
 func listSources(cfg Config) []sourceSummary {
+	sources, _ := listSourcesDetailed(cfg)
+	return sources
+}
+
+func listSourcesDetailed(cfg Config) ([]sourceSummary, []string) {
 	byDir := map[string]*sourceSummary{}
 	for name, pats := range cfg.Groups {
 		paths, _ := resolvePatternsWithHistory(pats, cfg.Excludes, false)
-		summary := &sourceSummary{Name: name, Paths: paths, Kind: "group"}
+		category := cfg.GroupCategories[name]
+		if category == "" {
+			category = "app"
+		}
+		module := cfg.GroupModules[name]
+		if module == "" {
+			module = name
+		}
+		summary := &sourceSummary{ID: name, Name: name, Category: category, Module: module, Paths: paths, Kind: "group"}
 		if len(pats) > 0 {
 			summary.Root = pats[0]
 		}
@@ -280,13 +299,14 @@ func listSources(cfg Config) []sourceSummary {
 		}
 		byDir["group:"+name] = summary
 	}
-	cs := collectLogCandidates(cfg.DefaultLogDirs, cfg.Excludes, timeZero, false)
-	for _, c := range cs {
+	result := collectLogCandidatesDetailed(cfg.DefaultLogDirs, cfg.Excludes, timeZero, false)
+	for _, c := range result.Candidates {
 		dir := filepath.Dir(c.Path)
 		name := filepath.Base(dir)
 		key := "dir:" + dir
 		if _, ok := byDir[key]; !ok {
-			byDir[key] = &sourceSummary{Name: name, Kind: "auto", Root: dir}
+			category, module := sourceMetadata(cfg, c.Path)
+			byDir[key] = &sourceSummary{ID: autoSourceID(cfg, category, dir), Name: name, Category: category, Module: module, Kind: "auto", Root: dir}
 		}
 		byDir[key].Paths = append(byDir[key].Paths, c.Path)
 		if c.ModTime.After(byDir[key].Latest) {
@@ -294,27 +314,147 @@ func listSources(cfg Config) []sourceSummary {
 		}
 	}
 	out := make([]sourceSummary, 0, len(byDir))
+	idCounts := map[string]int{}
+	for _, source := range byDir {
+		idCounts[source.ID]++
+	}
 	for _, v := range byDir {
 		if v.Kind == "auto" {
-			if _, ok := cfg.Groups[v.Name]; ok {
+			if groupNameForPath(cfg, v.Paths[0]) != "" {
 				continue
 			}
+		}
+		if idCounts[v.ID] > 1 {
+			v.ID += "-" + sourceIDHash(v.Root)
 		}
 		out = append(out, *v)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Kind == out[j].Kind {
-			return out[i].Name < out[j].Name
+			return out[i].ID < out[j].ID
 		}
 		return out[i].Kind < out[j].Kind
 	})
-	return out
+	return out, result.Warnings
+}
+
+func sourceIDHash(value string) string {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(value))
+	return fmt.Sprintf("%08x", hash.Sum32())
 }
 
 var timeZero = func() (z time.Time) { return }()
 
 type sourceSummary struct {
-	Name, Kind, Root string
-	Paths            []string
-	Latest           time.Time
+	ID, Name, Category, Module, Kind, Root string
+	Paths                                  []string
+	Latest                                 time.Time
+}
+
+func sourceByID(cfg Config, id string) (sourceSummary, bool) {
+	for _, source := range listSources(cfg) {
+		if source.ID == id {
+			return source, true
+		}
+	}
+	return sourceSummary{}, false
+}
+
+func groupNameForPath(cfg Config, path string) string {
+	abs, _ := filepath.Abs(path)
+	for name, patterns := range cfg.Groups {
+		for _, pattern := range patterns {
+			expanded := expandHome(pattern)
+			if hasMeta(expanded) && (globMatch(expanded, abs) || globMatch(expanded, path)) {
+				return name
+			}
+			if !hasMeta(expanded) {
+				clean := filepath.Clean(expanded)
+				if abs == clean || strings.HasPrefix(abs, clean+string(filepath.Separator)) {
+					return name
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func sourceMetadata(cfg Config, path string) (string, string) {
+	if group := groupNameForPath(cfg, path); group != "" {
+		category := cfg.GroupCategories[group]
+		if category == "" {
+			category = "app"
+		}
+		module := cfg.GroupModules[group]
+		if module == "" {
+			module = group
+		}
+		return category, module
+	}
+	lower := strings.ToLower(filepath.ToSlash(path))
+	category := "app"
+	switch {
+	case strings.Contains(lower, "/containers/") || strings.Contains(lower, "/pods/") || strings.Contains(lower, "/docker/"):
+		category = "container"
+	case strings.Contains(lower, "mysql") || strings.Contains(lower, "mariadb") || strings.Contains(lower, "postgres") || strings.Contains(lower, "redis"):
+		category = "database"
+	case strings.Contains(lower, "nginx") || strings.Contains(lower, "apache") || strings.Contains(lower, "httpd") || strings.Contains(lower, "haproxy") || strings.Contains(lower, "traefik") || strings.Contains(lower, "caddy"):
+		category = "web"
+	case strings.Contains(lower, "firewall") || strings.Contains(lower, "ufw") || strings.Contains(lower, "ipsec") || strings.Contains(lower, "wireguard") || strings.Contains(lower, "/network/"):
+		category = "network"
+	case strings.Contains(lower, "/journal/") || strings.Contains(lower, "/audit/") || strings.Contains(lower, "syslog") || strings.Contains(lower, "kern.log") || strings.Contains(lower, "/messages"):
+		category = "system"
+	}
+	return category, filepath.Base(filepath.Dir(path))
+}
+
+func autoSourceID(cfg Config, category, directory string) string {
+	best := ""
+	for _, root := range cfg.DefaultLogDirs {
+		relative, err := filepath.Rel(expandHome(root), directory)
+		if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			continue
+		}
+		candidate := filepath.ToSlash(relative)
+		if best == "" || len(candidate) < len(best) {
+			best = candidate
+		}
+	}
+	if best == "" {
+		best = strings.TrimPrefix(filepath.ToSlash(directory), "/")
+	}
+	return category + "/" + best
+}
+
+func filterSourcePaths(cfg Config, paths, categories, modules []string) []string {
+	if len(categories) == 0 && len(modules) == 0 {
+		return paths
+	}
+	wantedCategories := stringSet(categories)
+	wantedModules := stringSet(modules)
+	filtered := make([]string, 0, len(paths))
+	for _, path := range paths {
+		category, module := sourceMetadata(cfg, path)
+		if len(wantedCategories) > 0 && !wantedCategories[strings.ToLower(category)] {
+			continue
+		}
+		if len(wantedModules) > 0 && !wantedModules[strings.ToLower(module)] {
+			continue
+		}
+		filtered = append(filtered, path)
+	}
+	return filtered
+}
+
+func stringSet(values []string) map[string]bool {
+	set := map[string]bool{}
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			if normalized := strings.ToLower(strings.TrimSpace(part)); normalized != "" {
+				set[normalized] = true
+			}
+		}
+	}
+	return set
 }

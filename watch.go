@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -29,18 +32,20 @@ var (
 )
 
 type alertSummary struct {
-	Source string
-	Line   string
-	Key    string
-	Count  int
-	First  time.Time
-	Last   time.Time
+	Source      string
+	Line        string
+	Key         string
+	Count       int
+	First       time.Time
+	Last        time.Time
+	Approximate bool
 }
 
 type alertTracker struct {
 	alerts     map[string]*alertSummary
 	events     []time.Time
 	rateCapped bool
+	nextEvent  int
 }
 
 func newAlertTracker() *alertTracker {
@@ -48,6 +53,10 @@ func newAlertTracker() *alertTracker {
 }
 
 func (t *alertTracker) add(source, line string, at time.Time) {
+	t.addEvent(source, line, at, false)
+}
+
+func (t *alertTracker) addEvent(source, line string, at time.Time, approximate bool) {
 	signature := normalizeAlertLine(line)
 	key := source + "\x00" + signature
 	alert := t.alerts[key]
@@ -61,12 +70,14 @@ func (t *alertTracker) add(source, line string, at time.Time) {
 	alert.Line = line
 	alert.Count++
 	alert.Last = at
+	alert.Approximate = alert.Approximate || approximate
 	if len(t.events) < maxAlertEvents {
 		t.events = append(t.events, at)
 	} else {
+		t.events[t.nextEvent] = at
+		t.nextEvent = (t.nextEvent + 1) % len(t.events)
 		t.rateCapped = true
 	}
-	t.prune(at)
 }
 
 func normalizeAlertLine(line string) string {
@@ -90,13 +101,14 @@ func (t *alertTracker) evictOldestAlert() {
 
 func (t *alertTracker) prune(now time.Time) {
 	cutoff := now.Add(-alertRateWindow)
-	first := 0
-	for first < len(t.events) && t.events[first].Before(cutoff) {
-		first++
+	kept := t.events[:0]
+	for _, event := range t.events {
+		if !event.Before(cutoff) && !event.After(now.Add(5*time.Second)) {
+			kept = append(kept, event)
+		}
 	}
-	if first > 0 {
-		t.events = append([]time.Time(nil), t.events[first:]...)
-	}
+	t.events = kept
+	t.nextEvent = 0
 	if len(t.events) < maxAlertEvents {
 		t.rateCapped = false
 	}
@@ -118,19 +130,25 @@ func (t *alertTracker) summaries(now time.Time) ([]alertSummary, int) {
 }
 
 type alertWatcher struct {
-	cfg      Config
-	patterns []string
-	excludes []string
-	query    Query
-	states   map[string]*fileState
-	tracker  *alertTracker
-	failures map[string]string
+	cfg              Config
+	patterns         []string
+	excludes         []string
+	query            Query
+	states           map[string]*fileState
+	tracker          *alertTracker
+	failures         map[string]string
+	bootstrapPaths   []string
+	defaultDiscovery bool
+	categories       []string
+	modules          []string
+	fullLines        bool
 }
 
-func newAlertWatcher(cfg Config, patterns, excludes []string, query Query) *alertWatcher {
+func newAlertWatcher(cfg Config, patterns, excludes, bootstrapPaths []string, query Query) *alertWatcher {
 	return &alertWatcher{
 		cfg: cfg, patterns: patterns, excludes: excludes, query: query,
 		states: map[string]*fileState{}, tracker: newAlertTracker(), failures: map[string]string{},
+		bootstrapPaths: bootstrapPaths,
 	}
 }
 
@@ -140,16 +158,33 @@ func (w *alertWatcher) reportFailure(path string, err error) {
 		return
 	}
 	w.failures[path] = message
-	fmt.Fprintf(os.Stderr, "logc watch: skipping %s: %v\n", path, err)
+	fmt.Fprintf(os.Stderr, "logc watch: skipping %s: %s\n", sanitizeTerminalText(path), sanitizeTerminalText(err.Error()))
 }
 
 func (w *alertWatcher) clearFailure(path string) { delete(w.failures, path) }
 
-func (w *alertWatcher) observe(path string, lines []string, at time.Time) {
+func (w *alertWatcher) reportWarning(message string) {
+	key := "warning:" + message
+	if w.failures[key] == message {
+		return
+	}
+	w.failures[key] = message
+	fmt.Fprintf(os.Stderr, "logc watch: warning: %s\n", sanitizeTerminalText(message))
+}
+
+func (w *alertWatcher) observe(path string, lines []string, observedAt, fallbackTime time.Time) {
 	for _, line := range lines {
 		line = strings.TrimSuffix(line, "\r")
-		if !w.query.ignored(line) && w.query.match(line) && watchLineEligible(line, at, w.query) {
-			w.tracker.add(path, line, at)
+		eventTime := fallbackTime
+		timestamp, timestamped := lineTime(line)
+		if timestamped {
+			eventTime = timestamp
+		}
+		if eventTime.IsZero() {
+			eventTime = observedAt
+		}
+		if !w.query.ignored(line) && w.query.match(line) && !eventTime.Before(w.query.Since) {
+			w.tracker.addEvent(path, line, eventTime, !timestamped)
 		}
 	}
 }
@@ -164,7 +199,26 @@ func watchLineEligible(line string, observed time.Time, query Query) bool {
 	return !observed.Before(query.Since)
 }
 
-func (w *alertWatcher) addPath(path string) {
+func (w *alertWatcher) bootstrap() {
+	paths := append([]string(nil), w.bootstrapPaths...)
+	sortHistorical(paths)
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			w.reportFailure(path, err)
+			continue
+		}
+		w.clearFailure(path)
+		_, err = scanLogPathEach(path, w.query, func(line string) {
+			w.observe(path, []string{line}, time.Now(), info.ModTime())
+		})
+		if err != nil {
+			w.reportFailure(path, err)
+		}
+	}
+}
+
+func (w *alertWatcher) addPath(path string, observeInitial bool) {
 	if _, ok := w.states[path]; ok {
 		return
 	}
@@ -175,18 +229,31 @@ func (w *alertWatcher) addPath(path string) {
 	}
 	w.clearFailure(path)
 	w.states[path] = &fileState{Path: path, Info: info, Offset: offset}
-	w.observe(path, lines, time.Now())
+	if observeInitial {
+		w.observe(path, lines, time.Now(), info.ModTime())
+	}
 }
 
-func (w *alertWatcher) rescan() {
-	paths, err := resolvePatterns(w.patterns, w.excludes)
+func (w *alertWatcher) rescan(observeInitial bool) {
+	var paths []string
+	var warnings []string
+	var err error
+	if w.defaultDiscovery {
+		paths, warnings, err = discoverDefaultDetailed(w.cfg)
+	} else {
+		paths, err = resolvePatterns(w.patterns, w.excludes)
+	}
+	paths = filterSourcePaths(w.cfg, paths, w.categories, w.modules)
 	if err != nil {
 		w.reportFailure("log source scan", err)
 		return
 	}
+	for _, warning := range warnings {
+		w.reportWarning(warning)
+	}
 	w.clearFailure("log source scan")
 	for _, path := range paths {
-		w.addPath(path)
+		w.addPath(path, observeInitial)
 	}
 	active := make(map[string]bool, len(paths))
 	for _, path := range paths {
@@ -212,7 +279,7 @@ func (w *alertWatcher) poll() {
 			lines, offset, nextInfo, err := readLastLines(path, w.cfg.Lines)
 			if err == nil {
 				state.Info, state.Offset, state.Carry, state.CarryTruncated = nextInfo, offset, "", false
-				w.observe(path, lines, time.Now())
+				w.observe(path, lines, time.Now(), nextInfo.ModTime())
 			}
 			if err != nil {
 				w.reportFailure(path, err)
@@ -235,8 +302,36 @@ func (w *alertWatcher) poll() {
 		state.Info = info
 		parts, carry, carryTruncated := splitAppended(state.Carry, state.CarryTruncated, data)
 		state.Carry, state.CarryTruncated = carry, carryTruncated
-		w.observe(path, parts, time.Now())
+		observedAt := time.Now()
+		w.observe(path, parts, observedAt, observedAt)
 	}
+}
+
+func compactSourcePath(cfg Config, path string) string {
+	base := filepath.Base(path)
+	category, module := sourceMetadata(cfg, path)
+	if strings.HasPrefix(path, "systemd:") {
+		category, module = "system", strings.TrimPrefix(path, "systemd:")
+	}
+	return category + "/" + module + "/" + base
+}
+
+func truncateRunes(text string, limit int) string {
+	if limit < 2 {
+		return text
+	}
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	return string(runes[:limit-1]) + "…"
+}
+
+func terminalColumns() int {
+	if columns, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && columns >= 60 {
+		return columns
+	}
+	return 120
 }
 
 func (w *alertWatcher) render(out io.Writer, color, clear bool) {
@@ -245,7 +340,7 @@ func (w *alertWatcher) render(out io.Writer, color, clear bool) {
 	if clear {
 		fmt.Fprint(out, "\x1b[H\x1b[2J")
 	}
-	fmt.Fprintf(out, "logc watch %q  [%s]\n", w.query.Pattern, now.Format("15:04:05"))
+	fmt.Fprintf(out, "logc watch %q  [%s]\n", sanitizeTerminalText(w.query.Pattern), now.Format("15:04:05"))
 	rateLabel := fmt.Sprintf("%d", rate)
 	if w.tracker.rateCapped {
 		rateLabel += "+"
@@ -260,15 +355,19 @@ func (w *alertWatcher) render(out io.Writer, color, clear bool) {
 			alerts = alerts[:maxRenderedAlertRows]
 		}
 		for _, alert := range alerts {
-			line := alert.Line
+			source := truncateRunes(sanitizeTerminalText(compactSourcePath(w.cfg, alert.Source)), 28)
+			line := sanitizeTerminalText(alert.Line)
+			if !w.fullLines {
+				line = truncateRunes(line, max(30, terminalColumns()-58))
+			}
 			if color {
 				line = (&printer{color: true}).decorate(line)
 			}
-			fmt.Fprintf(out, "%-6d %-9s %-9s %-22s %s\n",
+			fmt.Fprintf(out, "%-6d %-9s %-9s %-28s %s\n",
 				alert.Count,
-				alert.First.Format("15:04:05"),
-				alert.Last.Format("15:04:05"),
-				filepath.Base(alert.Source),
+				formatAlertTime(alert.First, alert.Approximate),
+				formatAlertTime(alert.Last, alert.Approximate),
+				source,
 				line,
 			)
 		}
@@ -276,8 +375,19 @@ func (w *alertWatcher) render(out io.Writer, color, clear bool) {
 	fmt.Fprintln(out, "\nRefreshes every second · Press Ctrl+C to stop")
 }
 
+func formatAlertTime(timestamp time.Time, approximate bool) string {
+	formatted := timestamp.Format("15:04:05")
+	if approximate {
+		return "~" + formatted
+	}
+	return formatted
+}
+
 func (w *alertWatcher) run(ctx context.Context, out io.Writer, color, clear bool) {
-	w.rescan()
+	if len(w.bootstrapPaths) > 0 {
+		w.bootstrap()
+	}
+	w.rescan(len(w.bootstrapPaths) == 0)
 	w.render(out, color, clear)
 	pollTicker := time.NewTicker(250 * time.Millisecond)
 	scanTicker := time.NewTicker(w.cfg.ScanInterval)
@@ -293,7 +403,7 @@ func (w *alertWatcher) run(ctx context.Context, out io.Writer, color, clear bool
 		case <-pollTicker.C:
 			w.poll()
 		case <-scanTicker.C:
-			w.rescan()
+			w.rescan(true)
 		case <-renderTicker.C:
 			w.render(out, color, clear)
 		}
@@ -342,14 +452,38 @@ func watchCommand(args []string) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	w := newAlertWatcher(cfg, patterns, excludes, query)
-	w.run(ctx, os.Stdout, newPrinter(cfg.Color).color, stdoutIsTerminal())
+	color := newPrinter(cfg.Color).color
+	if resolved.JournalUnit != "" {
+		if err := runJournalAlertWatch(ctx, resolved.JournalUnit, cfg, query, os.Stdout, color, stdoutIsTerminal(), opts.Full); err != nil && ctx.Err() == nil {
+			fmt.Fprintln(os.Stderr, "logc watch:", err)
+			return 1
+		}
+		return 0
+	}
+	var bootstrapPaths []string
+	if !since.IsZero() {
+		historical, _, historyErr := resolveWatchArgsWithHistory(cfg, opts.Positionals, opts.Match, true)
+		if historyErr != nil {
+			fmt.Fprintln(os.Stderr, "logc watch:", historyErr)
+			return 2
+		}
+		bootstrapPaths = filterSourcePaths(cfg, historical.Paths, opts.Categories, opts.Modules)
+	}
+	w := newAlertWatcher(cfg, patterns, excludes, bootstrapPaths, query)
+	w.defaultDiscovery = resolved.DefaultDiscovery
+	w.categories, w.modules = opts.Categories, opts.Modules
+	w.fullLines = opts.Full
+	w.run(ctx, os.Stdout, color, stdoutIsTerminal())
 	return 0
 }
 
 func resolveWatchArgs(cfg Config, positionals []string, explicitMatch string) (ResolvedTarget, string, error) {
+	return resolveWatchArgsWithHistory(cfg, positionals, explicitMatch, false)
+}
+
+func resolveWatchArgsWithHistory(cfg Config, positionals []string, explicitMatch string, includeHistory bool) (ResolvedTarget, string, error) {
 	if explicitMatch != "" {
-		resolved, err := resolveWatchTargets(cfg, positionals)
+		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals, includeHistory)
 		return resolved, explicitMatch, err
 	}
 	if len(positionals) == 0 {
@@ -359,13 +493,13 @@ func resolveWatchArgs(cfg Config, positionals []string, explicitMatch string) (R
 	// Keep the original TARGET REGEX form working for existing users. The new
 	// preferred form puts the regex first so it can accept any number of targets.
 	if len(positionals) == 2 && !looksLikeSearchExpression(positionals[0]) && looksLikeSearchExpression(positionals[1]) {
-		resolved, err := resolveWatchTargets(cfg, positionals[:1])
+		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[:1], includeHistory)
 		if err == nil {
 			return resolved, positionals[1], nil
 		}
 	}
 
-	resolved, err := resolveWatchTargets(cfg, positionals[1:])
+	resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[1:], includeHistory)
 	if err != nil {
 		return ResolvedTarget{}, "", err
 	}
@@ -373,21 +507,89 @@ func resolveWatchArgs(cfg Config, positionals []string, explicitMatch string) (R
 }
 
 func resolveWatchTargets(cfg Config, rawTargets []string) (ResolvedTarget, error) {
+	return resolveWatchTargetsWithHistory(cfg, rawTargets, false)
+}
+
+func resolveWatchTargetsWithHistory(cfg Config, rawTargets []string, includeHistory bool) (ResolvedTarget, error) {
 	targets := splitWatchTargets(rawTargets)
 	if len(targets) == 0 {
-		return resolveTarget(cfg, "", false)
+		return resolveTarget(cfg, "", includeHistory)
 	}
-	resolved, consumed, err := resolveLeadingTargets(cfg, targets, false)
+	resolved, consumed, err := resolveLeadingTargets(cfg, targets, includeHistory)
 	if err != nil {
 		return ResolvedTarget{}, err
 	}
 	if consumed != len(targets) {
 		return ResolvedTarget{}, fmt.Errorf("no log source matched %q", targets[consumed])
 	}
-	if resolved.JournalUnit != "" {
-		return ResolvedTarget{}, fmt.Errorf("systemd journal targets are not supported by logc watch")
-	}
 	return resolved, nil
+}
+
+func runJournalAlertWatch(ctx context.Context, unit string, cfg Config, query Query, out io.Writer, color, clear, fullLines bool) error {
+	command, err := unitCommand(ctx, unit, cfg.Lines, true, query)
+	if err != nil {
+		return err
+	}
+	pipe, err := command.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	command.Stderr = os.Stderr
+	if err := command.Start(); err != nil {
+		return err
+	}
+
+	source := "systemd:" + unit
+	watcher := newAlertWatcher(cfg, nil, nil, nil, query)
+	watcher.fullLines = fullLines
+	watcher.states[source] = &fileState{Path: source}
+	lines := make(chan string, 1024)
+	done := make(chan error, 1)
+	go scanCommandLines(ctx, pipe, command, lines, done)
+	renderTicker := time.NewTicker(time.Second)
+	defer renderTicker.Stop()
+	watcher.render(out, color, clear)
+	for {
+		select {
+		case <-ctx.Done():
+			watcher.render(out, color, clear)
+			return ctx.Err()
+		case line, ok := <-lines:
+			if !ok {
+				lines = nil
+				continue
+			}
+			observedAt := time.Now()
+			watcher.observe(source, []string{line}, observedAt, observedAt)
+		case runErr := <-done:
+			watcher.render(out, color, clear)
+			return runErr
+		case <-renderTicker.C:
+			watcher.render(out, color, clear)
+		}
+	}
+}
+
+func scanCommandLines(ctx context.Context, reader io.Reader, command *exec.Cmd, lines chan<- string, done chan<- error) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 64*1024), maxCarryBytes)
+	for scanner.Scan() {
+		select {
+		case lines <- strings.TrimSuffix(scanner.Text(), "\r"):
+		case <-ctx.Done():
+			_ = command.Wait()
+			close(lines)
+			done <- ctx.Err()
+			return
+		}
+	}
+	close(lines)
+	if err := scanner.Err(); err != nil {
+		_ = command.Wait()
+		done <- err
+		return
+	}
+	done <- command.Wait()
 }
 
 func splitWatchTargets(rawTargets []string) []string {
