@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reorganize the landing page into a complete, CLI-ordered command guide with representative output, logrotate markers, and a responsive option reference.
+- Detect Linux logrotate configuration and mark managed files in log blocks, source listings, path resolution, JSON output, and watch dashboards.
+- Harden long-running follow by bounding stale failure state, retaining quiet active files, draining renamed files across rotation, limiting open descriptors, and closing them on replacement or exit.
 - Add incident-oriented command guidance, practical troubleshooting playbooks, and matching landing-page scenarios.
 - Prioritize newest files and the configured recent window for ordinary searches, with explicit `--all` for complete available history.
 - Stream complete regular and gzip logs during search instead of silently limiting results to 16 MiB.

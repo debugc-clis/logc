@@ -271,6 +271,7 @@ func realMain() int {
 	cfg.Excludes = excludes
 	out := newPrinter(cfg.Color)
 	out.sourceMeta = func(path string) (string, string) { return sourceMetadata(cfg, path) }
+	out.logrotate = defaultLogrotateRegistry().managed
 	out.json = opts.JSON
 	since, err := parseSince(opts.SinceRaw)
 	if err != nil {
@@ -651,13 +652,17 @@ func listCommand(args []string) int {
 		fmt.Println("no application log sources discovered")
 		return 0
 	}
-	fmt.Printf("%-28s %-10s %-14s %-7s %-7s %-10s %s\n", "ID", "CATEGORY", "MODULE", "TYPE", "FILES", "LATEST", "LOCATION")
+	logrotate := defaultLogrotateRegistry()
+	for _, warning := range logrotate.warnings {
+		fmt.Fprintln(os.Stderr, "logc: warning:", sanitizeTerminalText(warning))
+	}
+	fmt.Printf("%-28s %-10s %-14s %-7s %-7s %-10s %-8s %s\n", "ID", "CATEGORY", "MODULE", "TYPE", "FILES", "LATEST", "ROTATE", "LOCATION")
 	for _, s := range sources {
 		root := s.Root
 		if root == "" && len(s.Paths) > 0 {
 			root = s.Paths[0]
 		}
-		fmt.Printf("%-28s %-10s %-14s %-7s %-7d %-10s %s\n", sanitizeTerminalText(s.ID), sanitizeTerminalText(s.Category), sanitizeTerminalText(s.Module), s.Kind, len(s.Paths), formatAge(s.Latest), sanitizeTerminalText(root))
+		fmt.Printf("%-28s %-10s %-14s %-7s %-7d %-10s %-8s %s\n", sanitizeTerminalText(s.ID), sanitizeTerminalText(s.Category), sanitizeTerminalText(s.Module), s.Kind, len(s.Paths), formatAge(s.Latest), logrotateStatus(s.Paths, logrotate), sanitizeTerminalText(root))
 	}
 	return 0
 }
@@ -705,8 +710,16 @@ func whereCommand(args []string) int {
 		fmt.Printf("%s -> systemd:%s\n", args[0], r.JournalUnit)
 		return 0
 	}
+	logrotate := defaultLogrotateRegistry()
+	for _, warning := range logrotate.warnings {
+		fmt.Fprintln(os.Stderr, "logc: warning:", sanitizeTerminalText(warning))
+	}
 	for _, p := range uniqueSorted(r.Paths) {
-		fmt.Println(sanitizeTerminalText(p))
+		suffix := ""
+		if logrotate.managed(p) {
+			suffix = " [logrotate]"
+		}
+		fmt.Println(sanitizeTerminalText(p) + suffix)
 	}
 	return 0
 }

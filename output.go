@@ -13,6 +13,7 @@ type printer struct {
 	color      bool
 	json       bool
 	sourceMeta func(string) (string, string)
+	logrotate  func(string) bool
 }
 
 var (
@@ -35,6 +36,7 @@ func newPrinter(enabled bool) *printer {
 }
 
 func (p *printer) header(path, suffix string) string {
+	managedByLogrotate := p.logrotate != nil && p.logrotate(path)
 	displayPath := path
 	if p.sourceMeta != nil {
 		category, module := p.sourceMeta(path)
@@ -43,6 +45,12 @@ func (p *printer) header(path, suffix string) string {
 		}
 	}
 	path = sanitizeTerminalText(displayPath)
+	if managedByLogrotate {
+		if suffix != "" {
+			suffix += " · "
+		}
+		suffix += "logrotate"
+	}
 	suffix = sanitizeTerminalText(suffix)
 	ts := time.Now().Format("15:04:05")
 	meta := ts
@@ -138,13 +146,14 @@ func (p *printer) block(path string, lines []string, suffix string) {
 			category, module = p.sourceMeta(path)
 		}
 		_ = json.NewEncoder(os.Stdout).Encode(struct {
-			Path     string   `json:"path"`
-			Category string   `json:"category,omitempty"`
-			Module   string   `json:"module,omitempty"`
-			Time     string   `json:"time"`
-			Suffix   string   `json:"suffix,omitempty"`
-			Lines    []string `json:"lines"`
-		}{Path: path, Category: category, Module: module, Time: time.Now().Format(time.RFC3339), Suffix: suffix, Lines: lines})
+			Path      string   `json:"path"`
+			Category  string   `json:"category,omitempty"`
+			Module    string   `json:"module,omitempty"`
+			Logrotate bool     `json:"logrotate,omitempty"`
+			Time      string   `json:"time"`
+			Suffix    string   `json:"suffix,omitempty"`
+			Lines     []string `json:"lines"`
+		}{Path: path, Category: category, Module: module, Logrotate: p.logrotate != nil && p.logrotate(path), Time: time.Now().Format(time.RFC3339), Suffix: suffix, Lines: lines})
 		return
 	}
 	fmt.Println()

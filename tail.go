@@ -15,6 +15,9 @@ import (
 const (
 	maxFollowReadBytes = int64(4 * 1024 * 1024)
 	maxCarryBytes      = 2 * 1024 * 1024
+	maxPendingBytes    = 8 * 1024 * 1024
+	maxOpenFollowFiles = 256
+	missingPathGrace   = 30 * time.Second
 )
 
 type streamLine struct {
@@ -24,8 +27,10 @@ type streamLine struct {
 
 type fileState struct {
 	Path            string
+	File            *os.File
 	Info            os.FileInfo
 	Offset          int64
+	MissingSince    time.Time
 	Carry           string
 	CarryTruncated  bool
 	Pending         []string
@@ -36,6 +41,13 @@ type fileState struct {
 	AfterRemaining  int
 	DedupLast       string
 	DedupSuppressed int
+}
+
+func (s *fileState) close() {
+	if s.File != nil {
+		_ = s.File.Close()
+		s.File = nil
+	}
 }
 
 func readAppended(path string, offset, limit int64) ([]byte, error) {
@@ -59,8 +71,14 @@ func splitAppended(carry string, carryTruncated bool, data []byte) (lines []stri
 		next = parts[len(parts)-1]
 		parts = parts[:len(parts)-1]
 	}
-	if carryTruncated && len(parts) > 0 {
-		parts[0] = "[truncated long line] " + parts[0]
+	for index := range parts {
+		truncated := len(parts[index]) > maxCarryBytes || index == 0 && carryTruncated
+		if len(parts[index]) > maxCarryBytes {
+			parts[index] = parts[index][len(parts[index])-maxCarryBytes:]
+		}
+		if truncated {
+			parts[index] = "[truncated long line] " + parts[index]
+		}
 	}
 	if len(next) > maxCarryBytes {
 		next = next[len(next)-maxCarryBytes:]
@@ -100,7 +118,7 @@ func (f *follower) reportFailure(path string, err error) {
 func (f *follower) clearFailure(path string) { delete(f.failures, path) }
 
 func (f *follower) reportWarning(message string) {
-	key := "warning:" + message
+	key := warningFailureKey(message)
 	if f.failures[key] == message {
 		return
 	}
@@ -108,13 +126,34 @@ func (f *follower) reportWarning(message string) {
 	f.out.infof("warning: %s", message)
 }
 
+func warningFailureKey(message string) string { return "warning:" + message }
+
+func pruneFailureCache(failures map[string]string, active map[string]bool, warnings []string) {
+	keep := make(map[string]bool, len(active)+len(warnings))
+	for path := range active {
+		keep[path] = true
+	}
+	for _, warning := range warnings {
+		keep[warningFailureKey(warning)] = true
+	}
+	for key := range failures {
+		if !keep[key] {
+			delete(failures, key)
+		}
+	}
+}
+
 func readLastLines(path string, n int) ([]string, int64, os.FileInfo, error) {
-	f, err := os.Open(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, 0, nil, err
 	}
-	defer f.Close()
-	info, err := f.Stat()
+	defer file.Close()
+	return readLastLinesFrom(file, n)
+}
+
+func readLastLinesFrom(file *os.File, n int) ([]string, int64, os.FileInfo, error) {
+	info, err := file.Stat()
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -133,7 +172,7 @@ func readLastLines(path string, n int) ([]string, int64, os.FileInfo, error) {
 		}
 		pos -= take
 		buf := make([]byte, take)
-		if _, err := f.ReadAt(buf, pos); err != nil && err != io.EOF {
+		if _, err := file.ReadAt(buf, pos); err != nil && err != io.EOF {
 			return nil, 0, nil, err
 		}
 		data = append(buf, data...)
@@ -151,6 +190,30 @@ func readLastLines(path string, n int) ([]string, int64, os.FileInfo, error) {
 		lines = lines[len(lines)-n:]
 	}
 	return lines, size, info, nil
+}
+
+func openFileState(path string, lines int, keepOpen bool) ([]string, *fileState, error) {
+	if !keepOpen {
+		initial, offset, info, err := readLastLines(path, lines)
+		if err != nil {
+			return nil, nil, err
+		}
+		return initial, &fileState{Path: path, Info: info, Offset: offset}, nil
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	initial, offset, info, err := readLastLinesFrom(file, lines)
+	if err != nil {
+		_ = file.Close()
+		return nil, nil, err
+	}
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		_ = file.Close()
+		return nil, nil, err
+	}
+	return initial, &fileState{Path: path, File: file, Info: info, Offset: offset}, nil
 }
 
 func showSnapshot(paths []string, lines int, q Query, out *printer) {
@@ -199,22 +262,62 @@ func (f *follower) addPath(path string, announce bool) {
 	if _, ok := f.states[path]; ok {
 		return
 	}
-	lines, off, info, err := readLastLines(path, f.cfg.Lines)
+	openFiles := 0
+	for _, state := range f.states {
+		if state.File != nil {
+			openFiles++
+		}
+	}
+	lines, state, err := openFileState(path, f.cfg.Lines, openFiles < maxOpenFollowFiles)
 	if err != nil {
 		f.reportFailure(path, err)
 		return
 	}
 	f.clearFailure(path)
-	f.states[path] = &fileState{Path: path, Info: info, Offset: off}
+	f.states[path] = state
 	if f.skipInitial {
 		return
 	}
-	lines = f.initialFiltered(lines, info)
+	lines = f.initialFiltered(lines, state.Info)
 	if announce {
 		f.out.block(path, lines, "new file")
 	} else {
 		f.out.block(path, lines, "")
 	}
+}
+
+func retainExistingPaths(paths []string, states map[string]*fileState, cfg Config) []string {
+	limit := cfg.MaxFiles
+	if limit <= 0 || len(paths) >= limit {
+		return paths
+	}
+	seen := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		seen[path] = true
+	}
+	existing := make([]string, 0, len(states))
+	for path := range states {
+		existing = append(existing, path)
+	}
+	sort.Strings(existing)
+	now := time.Now()
+	for _, path := range existing {
+		if len(paths) >= limit || seen[path] {
+			continue
+		}
+		state := states[path]
+		info, err := os.Stat(path)
+		if err == nil && info.Mode().IsRegular() && !historicalLog(path) && !excluded(path, cfg.Excludes) {
+			paths = append(paths, path)
+			seen[path] = true
+			continue
+		}
+		if os.IsNotExist(err) && !state.MissingSince.IsZero() && now.Sub(state.MissingSince) < missingPathGrace {
+			paths = append(paths, path)
+			seen[path] = true
+		}
+	}
+	return paths
 }
 
 func (f *follower) rescan() {
@@ -227,6 +330,9 @@ func (f *follower) rescan() {
 		f.reportWarning(warning)
 	}
 	f.clearFailure("log source scan")
+	if f.defaultDiscovery {
+		paths = retainExistingPaths(paths, f.states, f.cfg)
+	}
 	for _, p := range paths {
 		f.addPath(p, true)
 	}
@@ -236,10 +342,12 @@ func (f *follower) rescan() {
 	}
 	for path := range f.states {
 		if !active[path] {
+			f.states[path].close()
 			delete(f.states, path)
 			f.clearFailure(path)
 		}
 	}
+	pruneFailureCache(f.failures, active, warnings)
 }
 
 func (f *follower) resolvePaths() ([]string, []string, error) {
@@ -322,55 +430,164 @@ func takeStreamDedupSummary(state *fileState) (string, bool) {
 	return summary, true
 }
 
+func resetStreamState(state *fileState) {
+	state.Carry, state.CarryTruncated = "", false
+	state.Prev = nil
+	state.Seq, state.LastEmittedSeq, state.AfterRemaining = 0, 0, 0
+	state.DedupLast, state.DedupSuppressed = "", 0
+}
+
+func (f *follower) capPending(state *fileState) {
+	pendingBytes := 0
+	for _, line := range state.Pending {
+		pendingBytes += len(line) + 1
+	}
+	if len(state.Pending) <= f.cfg.MaxBufferLines && pendingBytes <= maxPendingBytes {
+		return
+	}
+	drop := 0
+	for drop < len(state.Pending) && (len(state.Pending)-drop > f.cfg.MaxBufferLines || pendingBytes > maxPendingBytes) {
+		pendingBytes -= len(state.Pending[drop]) + 1
+		drop++
+	}
+	state.Pending = append([]string(nil), state.Pending[drop:]...)
+	state.Dropped += drop
+}
+
+func (f *follower) queueAppended(state *fileState, data []byte) {
+	parts, carry, carryTruncated := splitAppended(state.Carry, state.CarryTruncated, data)
+	state.Carry, state.CarryTruncated = carry, carryTruncated
+	state.Pending = append(state.Pending, f.streamFilter(state, parts)...)
+	f.capPending(state)
+}
+
+func (f *follower) prepareReset(state *fileState, marker string) {
+	if state.Carry != "" {
+		line := state.Carry
+		if state.CarryTruncated {
+			line = "[truncated long line] " + line
+		}
+		state.Carry, state.CarryTruncated = "", false
+		state.Pending = append(state.Pending, f.streamFilter(state, []string{line})...)
+	}
+	if f.query.Dedup {
+		if summary, ok := takeStreamDedupSummary(state); ok {
+			state.Pending = append(state.Pending, summary)
+		}
+	}
+	resetStreamState(state)
+	state.Pending = append(state.Pending, marker)
+	f.capPending(state)
+}
+
+func (f *follower) readOpenFile(state *fileState) error {
+	info, err := state.File.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() < state.Offset {
+		if _, err := state.File.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		state.Offset = 0
+		f.prepareReset(state, "↻ file truncated")
+	}
+	state.Info = info
+	if info.Size() == state.Offset {
+		return nil
+	}
+	data, err := io.ReadAll(io.LimitReader(state.File, maxFollowReadBytes))
+	if err != nil {
+		return err
+	}
+	state.Offset += int64(len(data))
+	f.queueAppended(state, data)
+	return nil
+}
+
+func (f *follower) replaceOpenFile(state *fileState) error {
+	next, err := os.Open(state.Path)
+	if err != nil {
+		return err
+	}
+	info, err := next.Stat()
+	if err != nil {
+		_ = next.Close()
+		return err
+	}
+	previous := state.File
+	state.File, state.Info, state.Offset, state.MissingSince = next, info, 0, time.Time{}
+	f.prepareReset(state, "↻ file rotated/replaced")
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return f.readOpenFile(state)
+}
+
+func (f *follower) pollOpenState(path string, state *fileState) error {
+	if err := f.readOpenFile(state); err != nil {
+		return err
+	}
+	pathInfo, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) && state.MissingSince.IsZero() {
+			state.MissingSince = time.Now()
+		}
+		return err
+	}
+	state.MissingSince = time.Time{}
+	if state.Info != nil && !os.SameFile(state.Info, pathInfo) {
+		return f.replaceOpenFile(state)
+	}
+	return nil
+}
+
+func (f *follower) pollPathState(path string, state *fileState) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) && state.MissingSince.IsZero() {
+			state.MissingSince = time.Now()
+		}
+		return err
+	}
+	state.MissingSince = time.Time{}
+	if state.Info != nil && !os.SameFile(state.Info, info) {
+		state.Info, state.Offset = info, 0
+		f.prepareReset(state, "↻ file rotated/replaced")
+	}
+	if info.Size() < state.Offset {
+		state.Offset = 0
+		f.prepareReset(state, "↻ file truncated")
+	}
+	if info.Size() == state.Offset {
+		state.Info = info
+		return nil
+	}
+	data, err := readAppended(path, state.Offset, maxFollowReadBytes)
+	if err != nil {
+		return err
+	}
+	state.Offset += int64(len(data))
+	state.Info = info
+	f.queueAppended(state, data)
+	return nil
+}
+
 func (f *follower) poll() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for path, st := range f.states {
-		info, err := os.Stat(path)
+	for path, state := range f.states {
+		var err error
+		if state.File != nil {
+			err = f.pollOpenState(path, state)
+		} else {
+			err = f.pollPathState(path, state)
+		}
 		if err != nil {
 			f.reportFailure(path, err)
 			continue
 		}
 		f.clearFailure(path)
-		if st.Info != nil && !os.SameFile(st.Info, info) {
-			lines, off, ni, e := readLastLines(path, f.cfg.Lines)
-			if e == nil {
-				st.Info, st.Offset, st.Carry, st.CarryTruncated = ni, off, "", false
-				st.Prev = nil
-				st.Seq, st.LastEmittedSeq, st.AfterRemaining = 0, 0, 0
-				st.DedupLast, st.DedupSuppressed = "", 0
-				st.Pending = append(st.Pending, "↻ file rotated/replaced")
-				st.Pending = append(st.Pending, f.streamFilter(st, lines)...)
-			}
-			if e != nil {
-				f.reportFailure(path, e)
-			}
-			continue
-		}
-		if info.Size() < st.Offset {
-			st.Offset = 0
-			st.Carry, st.CarryTruncated = "", false
-			st.Pending = append(st.Pending, "↻ file truncated")
-		}
-		if info.Size() == st.Offset {
-			st.Info = info
-			continue
-		}
-		b, err := readAppended(path, st.Offset, maxFollowReadBytes)
-		if err != nil {
-			f.reportFailure(path, err)
-			continue
-		}
-		st.Offset += int64(len(b))
-		st.Info = info
-		parts, carry, carryTruncated := splitAppended(st.Carry, st.CarryTruncated, b)
-		st.Carry, st.CarryTruncated = carry, carryTruncated
-		st.Pending = append(st.Pending, f.streamFilter(st, parts)...)
-		if len(st.Pending) > f.cfg.MaxBufferLines {
-			drop := len(st.Pending) - f.cfg.MaxBufferLines
-			st.Pending = append([]string(nil), st.Pending[drop:]...)
-			st.Dropped += drop
-		}
 	}
 }
 
@@ -412,6 +629,7 @@ func (f *follower) flushFair() {
 }
 
 func (f *follower) run(ctx context.Context) {
+	defer f.closeStates()
 	if paths, _, err := f.resolvePaths(); err == nil {
 		for _, p := range paths {
 			f.addPath(p, false)
@@ -441,5 +659,13 @@ func (f *follower) run(ctx context.Context) {
 		case <-scanTicker.C:
 			f.rescan()
 		}
+	}
+}
+
+func (f *follower) closeStates() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, state := range f.states {
+		state.close()
 	}
 }

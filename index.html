@@ -276,9 +276,17 @@
     }
     .mini-terminal{
       border:1px solid rgba(137,151,182,.18);border-radius:3px;
-      flex:1;background:#07090e;padding:15px;min-height:276px;overflow:hidden;
+      flex:1;background:#07090e;padding:15px;min-height:0;overflow:hidden;
       font:11px/1.52 var(--mono);color:#cfc4dc;
     }
+    .example-card.wide{grid-column:1/-1}
+    .example-syntax{color:var(--teal-2);font-weight:800}
+    .options-panel{margin-top:16px;padding:20px}
+    .options-heading{margin-bottom:15px;color:#dbe0eb;font:800 14px/1.3 var(--mono)}
+    .options-heading span{color:var(--teal-2)}
+    .options-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+    .option-item{display:grid;grid-template-columns:max-content 1fr;gap:12px;align-items:start;background:#090c12;padding:12px 13px;color:#8f98aa;font-size:11px;line-height:1.45}
+    .option-item code{color:#cdbcf0;font:700 10px/1.45 var(--mono);white-space:nowrap}
 
     .copy{
       margin-left:auto;border:0;background:transparent;color:var(--teal);
@@ -368,6 +376,9 @@
     html[data-theme="light"] .example-when{color:#616b7e}
     html[data-theme="light"] .badge{background:#f0eafa}
     html[data-theme="light"] .mini-terminal{background:#f8f9fc;color:#343b4a}
+    html[data-theme="light"] .options-heading{color:#262b37}
+    html[data-theme="light"] .option-item{background:#f8f9fc;color:#616b7e}
+    html[data-theme="light"] .option-item code{color:#6337ad}
     html[data-theme="light"] footer{background:#eef1f7}
     html[data-theme="light"] .footer-heading{color:#554369}
     html[data-theme="light"] .footer-links{color:#4d5668}
@@ -384,6 +395,7 @@
       .hero{padding-top:50px;min-height:0}
       .feature-grid{grid-template-columns:repeat(2,1fr)}
       .examples-grid{grid-template-columns:repeat(2,1fr)}
+      .options-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
       .footer-grid{grid-template-columns:1fr 1fr;gap:32px}
     }
     @media (max-width:760px){
@@ -393,6 +405,8 @@
       .hero-copy p{font-size:16px}
       .terminal-body{min-height:0;font-size:11px;padding:20px}
       .examples-grid{grid-template-columns:1fr}
+      .example-card.wide{grid-column:auto}
+      .options-grid{grid-template-columns:1fr}
       #examples{padding:48px 0}
       .footer-grid{grid-template-columns:1fr;gap:28px}
       .footer-resources{max-width:390px}
@@ -493,7 +507,7 @@
 2026-08-08 13:48:42  <span class="info">INFO </span> job=invoice-882 picked_up
 2026-08-08 13:49:02  <span class="warn">WARN </span> queue_depth=842 threshold=800
 
-<span class="path">[web/nginx] /var/log/nginx/access.log</span> <span class="dim">[shown 13:49:12]</span>
+<span class="path">[web/nginx] /var/log/nginx/access.log</span> <span class="dim">[shown 13:49:12 · logrotate]</span>
 10.0.2.14 - GET /api/payments 200 42ms
 10.0.2.18 - POST /api/payments 201 218ms</pre>
               <div class="statusline">
@@ -573,156 +587,221 @@ $ tail -f app.log | grep ERROR</pre>
 
     <section id="examples">
       <div class="wrap">
-        <h2 class="section-title">How <span>logc</span> works</h2>
-        <p class="section-intro">Start with the clue you have—host, service, symptom, process, port, unit, or container. logc turns it into a focused log workflow.</p>
+        <h2 class="section-title">Complete <span>command guide</span></h2>
+        <p class="section-intro">Every command form, ordered exactly like the CLI help. Each form uses one practical example so you can move from discovery to a focused live stream without learning a new query language.</p>
 
         <div class="examples-grid">
           <article class="card example-card">
-            <div class="example-label"><span class="badge">1</span>See active app logs</div>
+            <div class="example-label"><span class="badge">01</span><span><span class="example-syntax">logc</span> — discover and follow</span></div>
             <p class="example-when">Use when you have just opened an unfamiliar host and need an immediate overview.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc
 
-<span class="path">/srv/api/log/app.log</span>
+<span class="path">[app/api] /srv/api/log/app.log</span> <span class="dim">[shown 14:21:09 · logrotate]</span>
 14:21:01 <span class="info">INFO</span> server started
-14:21:05 <span class="info">INFO</span> listening on :8080
-14:21:09 <span class="info">INFO</span> health check OK
+14:21:09 <span class="warn">WARN</span> database latency=421ms
 
-<span class="path">/srv/worker/log/worker.log</span>
-14:20:58 <span class="info">INFO</span> job completed id=842
-14:21:02 <span class="info">INFO</span> pulled 10 tasks
-
-<span class="path">/var/log/nginx/access.log</span>
+<span class="path">[web/nginx] /var/log/nginx/access.log</span> <span class="dim">[shown 14:21:09 · logrotate]</span>
 14:21:03 <span class="info">INFO</span> 200 GET /health 1ms
 
-<span class="dim">3 files · latest lines</span></pre>
+<span class="ok">-- following new lines --</span></pre>
             </div>
           </article>
 
           <article class="card example-card">
-            <div class="example-label"><span class="badge">2</span>Search recent—or all—service logs</div>
-            <p class="example-when">Use when you know the service and symptom, but not which active or rotated file contains it.</p>
+            <div class="example-label"><span class="badge">02</span><span><span class="example-syntax">logc TARGET</span> — follow one source</span></div>
+            <p class="example-when">Use a source name when you know the service but do not want to remember its exact file paths.</p>
             <div class="mini-terminal">
-<pre><span class="prompt">$</span> logc payment ERROR
+<pre><span class="prompt">$</span> logc api
 
-<span class="path">/srv/payment/log/app.log</span>
-14:17:11 <span class="err">ERROR</span> charge failed
-request_id=9d2b1 code=42
+<span class="path">[app/api] /srv/api/log/app.log</span> <span class="dim">[shown 14:24:18 · logrotate]</span>
+14:24:16 <span class="info">INFO</span> GET /v1/orders 200 42ms
+14:24:18 <span class="warn">WARN</span> retry budget remaining=2
 
-<span class="path">/srv/payment/log/app.log.1.gz</span>
-14:02:55 <span class="err">ERROR</span> upstream timeout
-after 30s
-request_id=9c8a0
+<span class="ok">-- following --</span>
 
-<span class="dim">2 files · 2 matches · recent 24h</span>
-
-<span class="prompt">$</span> logc payment ERROR --all
-
-<span class="path">/srv/payment/log/app.log.7.gz</span>
-2026-07-14 09:31:22 <span class="err">ERROR</span> settlement rejected
-
-<span class="dim">active + rotated + .gz · all available history</span></pre>
+<span class="dim">TARGET also accepts a file, directory, glob, @process, @PID, or :port.</span></pre>
             </div>
           </article>
 
           <article class="card example-card">
-            <div class="example-label"><span class="badge">3</span>Jump from port to logs</div>
-            <p class="example-when">Use when an unhealthy endpoint is known only by its listening port.</p>
+            <div class="example-label"><span class="badge">03</span><span><span class="example-syntax">logc TARGET REGEX</span> — search a source</span></div>
+            <p class="example-when">Use when you know the service and symptom but not which active, rotated, or compressed file contains it.</p>
             <div class="mini-terminal">
-<pre><span class="prompt">$</span> logc :8080
+<pre><span class="prompt">$</span> logc payment ERROR --since 30m -C 2
 
-:8080 → PID 21819 → payment-api
-      → <span class="path">/srv/payment/log/app.log</span>
+<span class="path">[app/payment] /srv/payment/log/app.log</span> <span class="dim">[shown 14:25:02 · 1 match · logrotate]</span>
+14:24:58 <span class="info">INFO</span> authorizing charge
+14:25:01 <span class="err">ERROR</span> upstream timeout request_id=9d2b1
+14:25:02 <span class="info">INFO</span> retrying attempt=1
 
-<span class="path">/srv/payment/log/app.log</span>
-14:21:17 <span class="info">INFO</span> GET /v1/orders 200
-14:21:18 <span class="err">ERROR</span> upstream timeout
-          after 30s
-14:21:19 <span class="info">INFO</span> retrying id=aa91
-
-<span class="dim">resolved automatically</span></pre>
+<span class="path">[app/payment] /srv/payment/log/app.log.1.gz</span> <span class="dim">[shown 14:25:02 · 1 match · logrotate]</span>
+14:02:55 <span class="err">ERROR</span> settlement rejected code=42</pre>
             </div>
           </article>
 
           <article class="card example-card">
-            <div class="example-label"><span class="badge">4</span>Find process logs</div>
-            <p class="example-when">Use when you know the Linux process name or PID, but not its log path.</p>
+            <div class="example-label"><span class="badge">04</span><span><span class="example-syntax">logc REGEX</span> — search recent machine logs</span></div>
+            <p class="example-when">Use when you know the symptom but do not yet know which application produced it.</p>
             <div class="mini-terminal">
-<pre><span class="prompt">$</span> logc @nginx
+<pre><span class="prompt">$</span> logc ERROR
 
-<span class="path">[web/nginx] /var/log/nginx/error.log</span>
-14:20:59 <span class="err">ERROR</span> connect() failed
-          (111: Connection refused)
+<span class="path">[app/api] /srv/api/log/app.log</span> <span class="dim">[shown 14:26:31 · 2 matches · logrotate]</span>
+14:26:02 <span class="err">ERROR</span> connection reset by peer
+14:26:31 <span class="err">ERROR</span> upstream timeout after 30s
 
-<span class="dim">resolved from the nginx process · following</span></pre>
+<span class="path">[app/worker] /srv/worker/log/worker.log</span> <span class="dim">[shown 14:26:31 · 1 match]</span>
+14:25:44 <span class="err">ERROR</span> queue unavailable
+
+<span class="dim">3 matching lines · recent 24h</span></pre>
             </div>
           </article>
 
           <article class="card example-card">
-            <div class="example-label"><span class="badge">5</span>Search history, then follow</div>
+            <div class="example-label"><span class="badge">05</span><span><span class="example-syntax">logc TARGET REGEX -f</span> — search, then follow</span></div>
             <p class="example-when">Use when an incident began recently and you want historical context plus new matching events.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc api 'timeout|reset' --since 30m -f
 
-<span class="path">/srv/api/log/app.log.1.gz</span>
+<span class="path">[app/api] /srv/api/log/app.log.1.gz</span> <span class="dim">[shown 13:49:11 · 1 match · logrotate]</span>
 13:36:45 <span class="err">ERROR</span> upstream timeout after 30s
 
-<span class="path">/srv/api/log/app.log</span>
+<span class="path">[app/api] /srv/api/log/app.log</span> <span class="dim">[shown 13:49:11 · 1 match · logrotate]</span>
 13:49:11 <span class="err">ERROR</span> upstream timeout after 30s
 <span class="ok">-- following matching lines --</span>
 13:50:02 <span class="warn">WARN</span> connection reset by peer
-
-<span class="dim">2 files · since 30m · following</span></pre>
+</pre>
             </div>
           </article>
 
           <article class="card example-card">
-            <div class="example-label"><span class="badge">6</span>Stream system logs</div>
-            <p class="example-when">Use when the failure may involve systemd, the kernel, networking, or another host-level service.</p>
-            <div class="mini-terminal">
-<pre><span class="prompt">$</span> logc system
-
-2026-08-08 14:22:07 host systemd[1]: api.service started
-2026-08-08 14:22:12 host nginx[1542]: worker process ready
-2026-08-08 14:22:31 host kernel: eth0 link is up
-2026-08-08 14:22:38 host systemd[1]: backup.service completed
-
-<span class="dim">streaming operating-system logs · --all requires Linux journald</span>
-<span class="ok">-- following -- (press Ctrl+C to stop)</span></pre>
-            </div>
-          </article>
-
-          <article class="card example-card">
-            <div class="example-label"><span class="badge">7</span>Follow a Docker container</div>
-            <p class="example-when">Use when the workload runs in Docker and you want native Docker options with logc filtering.</p>
-            <div class="mini-terminal">
-<pre><span class="prompt">$</span> logc docker api
-
-2026-08-08T14:31:04.812Z <span class="info">INFO</span> api listening on :8080
-2026-08-08T14:31:19.441Z <span class="warn">WARN</span> database latency=421ms
-2026-08-08T14:31:24.109Z <span class="err">ERROR</span> upstream timeout request_id=req-8f1aa
-2026-08-08T14:31:24.112Z <span class="info">INFO</span> retrying request_id=req-8f1aa attempt=1
-
-<span class="ok">-- following Docker logs -- (press Ctrl+C to stop)</span></pre>
-            </div>
-          </article>
-
-          <article class="card example-card">
-            <div class="example-label"><span class="badge">8</span>Watch an error storm</div>
-            <p class="example-when">Use when repeated errors scroll too quickly and you need rate, count, and timing instead of raw lines.</p>
+            <div class="example-label"><span class="badge">06</span><span><span class="example-syntax">logc watch REGEX [TARGET...]</span></span></div>
+            <p class="example-when">Use when repeated errors scroll too quickly and you need rate, count, and timing instead of every raw line.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc watch ERROR api --since 30m
 
 logc watch "ERROR"  [13:50:03]
 2 alert groups · 7 events/min · 3 sources
 
-COUNT  FIRST     LAST      SOURCE              ALERT
-12     13:42:02  13:49:11  app/api/app.log     <span class="err">ERROR</span> upstream timeout
-4      13:45:18  13:49:44  app/worker/work…    <span class="err">ERROR</span> queue reset
+COUNT  FIRST     LAST      SOURCE                 ALERT
+12     13:42:02  13:49:11  app/api/app.log [R]    <span class="err">ERROR</span> upstream timeout
+4      13:45:18  13:49:44  app/worker/worker.log  <span class="err">ERROR</span> queue reset
 
-<span class="dim">Refreshes every second · Press Ctrl+C to stop</span></pre>
+<span class="dim">Refreshes every second · [R] means logrotate-managed</span></pre>
             </div>
           </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">07</span><span><span class="example-syntax">logc system [REGEX]</span></span></div>
+            <p class="example-when">Use when the failure may involve systemd, the kernel, networking, or another host-level service.</p>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc system ERROR --since 30m
+
+2026-08-08 14:22:31 host kernel: <span class="err">ERROR</span> eth0 transmit timeout
+2026-08-08 14:22:38 host systemd[1]: api.service failed with result 'exit-code'
+
+<span class="ok">-- following system logs --</span>
+<span class="dim">Use --kernel for the kernel-only stream.</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">08</span><span><span class="example-syntax">logc docker [OPTIONS] NAME</span></span></div>
+            <p class="example-when">Use Docker's native log options while retaining logc filtering, deduplication, color, and JSON output.</p>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc docker --tail 100 --timestamps api
+
+2026-08-08T14:31:04.812Z <span class="info">INFO</span> api listening on :8080
+2026-08-08T14:31:19.441Z <span class="warn">WARN</span> database latency=421ms
+2026-08-08T14:31:24.109Z <span class="err">ERROR</span> upstream timeout request_id=req-8f1aa
+
+<span class="ok">-- following Docker logs --</span>
+<span class="dim">Docker options are forwarded directly to docker logs.</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">09</span><span><span class="example-syntax">logc ls [FILTERS]</span> — inspect sources</span></div>
+            <p class="example-when">Use before an incident to see what logc discovered, how it classified each source, and whether logrotate manages it.</p>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc ls --category web
+
+ID          CATEGORY MODULE TYPE FILES LATEST ROTATE LOCATION
+web/nginx   web      nginx  auto 2     4s     yes    /var/log/nginx
+web/haproxy web      haproxy auto 3     2m     partial /var/log/haproxy
+
+<span class="dim">ROTATE: yes · partial · -</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">10</span><span><span class="example-syntax">logc where TARGET</span> — resolve paths</span></div>
+            <p class="example-when">Use when you want to verify exactly which files a named, discovered, process, PID, or port target resolves to.</p>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc where web/nginx
+
+<span class="path">/var/log/nginx/access.log</span> <span class="ok">[logrotate]</span>
+<span class="path">/var/log/nginx/error.log</span> <span class="ok">[logrotate]</span>
+
+<span class="dim">Read-only path resolution. No files are changed.</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">11</span><span><span class="example-syntax">logc config</span> — inspect configuration</span></div>
+            <p class="example-when">Use to create, locate, or inspect the effective roots, exclusions, groups, limits, and output settings.</p>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc config show
+
+config=/home/sre/.logc.conf
+default_log_dir=/var/log
+exclude=/var/log/journal/**
+[group.mysql]
+category=database
+path=/var/log/mysql/*.log
+
+<span class="dim">Also available: config init · config path</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">12</span><span><span class="example-syntax">logc help / version</span></span></div>
+            <p class="example-when">Use these stable utility commands to inspect the installed CLI syntax and build version.</p>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc version
+logc v0.2.0 (linux/amd64)
+
+<span class="prompt">$</span> logc --help
+logc — one command for local logs
+
+USAGE
+  logc
+  logc TARGET
+  logc TARGET REGEX
+  ...</pre>
+            </div>
+          </article>
+        </div>
+
+        <div class="options-panel card" aria-label="Common command options">
+          <div class="options-heading"><span>FLAGS</span> / common options</div>
+          <div class="options-grid">
+            <div class="option-item"><code>-f, --follow</code><span>Keep following after a search.</span></div>
+            <div class="option-item"><code>--since VALUE</code><span>Limit history with 10m, 2h, 7d, today, or a timestamp.</span></div>
+            <div class="option-item"><code>--all</code><span>Search all available history explicitly.</span></div>
+            <div class="option-item"><code>-C N</code><span>Show context lines around each match.</span></div>
+            <div class="option-item"><code>-i</code><span>Use case-insensitive regex matching.</span></div>
+            <div class="option-item"><code>-n N</code><span>Choose the initial lines shown per file.</span></div>
+            <div class="option-item"><code>--dedup</code><span>Collapse consecutive duplicate lines.</span></div>
+            <div class="option-item"><code>--no-color</code><span>Disable severity and source colors.</span></div>
+            <div class="option-item"><code>--json</code><span>Emit one JSON object per log block.</span></div>
+            <div class="option-item"><code>--current</code><span>Skip rotated and gzip-compressed history.</span></div>
+            <div class="option-item"><code>--category LIST</code><span>Filter app, web, network, database, container, or custom sources.</span></div>
+            <div class="option-item"><code>--module LIST</code><span>Filter configured source modules.</span></div>
+            <div class="option-item"><code>--full</code><span>Do not truncate long rows in logc watch.</span></div>
+            <div class="option-item"><code>-m REGEX</code><span>Provide an explicit match expression when positional input is ambiguous.</span></div>
+            <div class="option-item"><code>--exclude GLOB</code><span>Exclude matching paths for the current command.</span></div>
+          </div>
         </div>
       </div>
     </section>

@@ -91,7 +91,9 @@ logc /srv/api/log          # Follow all supported logs in a directory.
 logc '/srv/**/logs/*.log'  # Follow a recursive glob and discover new files.
 ```
 
-`logc ls` shows a stable source ID, category, module, type, file count, latest activity age, and location. Auto-discovered source IDs such as `web/nginx` can be passed back to `logc` directly.
+`logc ls` shows a stable source ID, category, module, type, file count, latest activity age, logrotate status, and location. `ROTATE=yes` means every discovered file in that source is managed by logrotate; `partial` means only some files are managed. Auto-discovered source IDs such as `web/nginx` can be passed back to `logc` directly.
+
+On Linux, logc reads `/etc/logrotate.conf` and included files such as `/etc/logrotate.d/nginx`. Managed files are marked as `logrotate` in normal log block headers, as `[logrotate]` in `logc where`, and as `[R]` in the compact `logc watch` source column. Historical `.log.1` and `.log.1.gz` files are associated with the matching active logrotate path when possible. The inspection is read-only; logc never changes rotation policy or runs logrotate.
 
 Configure memorable names when paths are inconvenient:
 
@@ -304,8 +306,11 @@ On Linux, logc detects the distribution from `/etc/os-release` and excludes dist
 ## Operational Limits
 
 - `logc` is read-only, but access to host, container, and system logs still depends on the current user's permissions.
+- Follow mode streams completed batches directly to stdout and diagnostics to stderr; it does not retain previously printed output. Each file's pending queue is capped by both `max_buffer_lines` and an 8 MiB safety limit, so a slow terminal or pipe causes older buffered lines to be dropped with an explicit warning instead of allowing unbounded process memory growth. Terminal scrollback and redirected output files are managed by the terminal or shell, not by logc.
+- Active files stay open across normal rename-and-create log rotation so logc can drain the old file before following the replacement. Open descriptors are capped at 256; larger explicit source sets fall back to path-based polling. Descriptors are closed when a source is removed, replaced, or logc exits.
+- Files already being followed remain active when they become older than the `recent` discovery window, provided the default `max_files` budget has room. A temporarily missing path is retained for 30 seconds to bridge common rotation gaps.
 - Recursive filesystem-root scans are refused. Keep source groups and glob roots narrow; new files are rescanned every five seconds by default.
-- Follow and watch modes cap each per-file read at 4 MiB and truncate an unterminated line after 2 MiB to protect the host during high-volume incidents.
+- Follow and watch modes cap each per-file read at 4 MiB and truncate an individual or unterminated line after 2 MiB to protect the host during high-volume incidents.
 - Recent default-source searches skip files whose modification time is older than the requested window, process newer files first, and fairly select up to `max_files × 5` candidates; logc warns when that safety limit applies. Narrow the target or increase `max_files` when needed. Explicit `--all` searches are not file-limited, can take time on large histories, and can be interrupted with Ctrl+C.
 - Explicit directories containing more than 1,000 files produce a polling-load warning and use a slower poll interval.
 - Terminal control sequences in log lines and paths are removed before human-readable rendering; JSON preserves the original text through normal JSON escaping.

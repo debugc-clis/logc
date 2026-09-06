@@ -142,6 +142,7 @@ type alertWatcher struct {
 	categories       []string
 	modules          []string
 	fullLines        bool
+	logrotate        *logrotateRegistry
 }
 
 func newAlertWatcher(cfg Config, patterns, excludes, bootstrapPaths []string, query Query) *alertWatcher {
@@ -149,6 +150,7 @@ func newAlertWatcher(cfg Config, patterns, excludes, bootstrapPaths []string, qu
 		cfg: cfg, patterns: patterns, excludes: excludes, query: query,
 		states: map[string]*fileState{}, tracker: newAlertTracker(), failures: map[string]string{},
 		bootstrapPaths: bootstrapPaths,
+		logrotate:      defaultLogrotateRegistry(),
 	}
 }
 
@@ -164,7 +166,7 @@ func (w *alertWatcher) reportFailure(path string, err error) {
 func (w *alertWatcher) clearFailure(path string) { delete(w.failures, path) }
 
 func (w *alertWatcher) reportWarning(message string) {
-	key := "warning:" + message
+	key := warningFailureKey(message)
 	if w.failures[key] == message {
 		return
 	}
@@ -252,6 +254,9 @@ func (w *alertWatcher) rescan(observeInitial bool) {
 		w.reportWarning(warning)
 	}
 	w.clearFailure("log source scan")
+	if w.defaultDiscovery {
+		paths = retainExistingPaths(paths, w.states, w.cfg)
+	}
 	for _, path := range paths {
 		w.addPath(path, observeInitial)
 	}
@@ -265,15 +270,20 @@ func (w *alertWatcher) rescan(observeInitial bool) {
 			w.clearFailure(path)
 		}
 	}
+	pruneFailureCache(w.failures, active, warnings)
 }
 
 func (w *alertWatcher) poll() {
 	for path, state := range w.states {
 		info, err := os.Stat(path)
 		if err != nil {
+			if os.IsNotExist(err) && state.MissingSince.IsZero() {
+				state.MissingSince = time.Now()
+			}
 			w.reportFailure(path, err)
 			continue
 		}
+		state.MissingSince = time.Time{}
 		w.clearFailure(path)
 		if state.Info != nil && !os.SameFile(state.Info, info) {
 			lines, offset, nextInfo, err := readLastLines(path, w.cfg.Lines)
@@ -355,7 +365,11 @@ func (w *alertWatcher) render(out io.Writer, color, clear bool) {
 			alerts = alerts[:maxRenderedAlertRows]
 		}
 		for _, alert := range alerts {
-			source := truncateRunes(sanitizeTerminalText(compactSourcePath(w.cfg, alert.Source)), 28)
+			sourceLabel := compactSourcePath(w.cfg, alert.Source)
+			if w.logrotate.managed(alert.Source) {
+				sourceLabel += " [R]"
+			}
+			source := truncateRunes(sanitizeTerminalText(sourceLabel), 28)
 			line := sanitizeTerminalText(alert.Line)
 			if !w.fullLines {
 				line = truncateRunes(line, max(30, terminalColumns()-58))
