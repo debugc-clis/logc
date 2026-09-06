@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" data-theme-mode="auto">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -21,15 +21,14 @@
   <meta id="themeColor" name="theme-color" content="#07080d" />
   <script>
     (() => {
-      let theme = 'dark';
+      const themeMedia = window.matchMedia('(prefers-color-scheme: light)');
+      let mode = 'auto';
       try {
         const savedTheme = localStorage.getItem('logc-theme');
-        theme = savedTheme === 'light' || savedTheme === 'dark'
-          ? savedTheme
-          : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-      } catch (_) {
-        theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-      }
+        if (savedTheme === 'light' || savedTheme === 'dark') mode = savedTheme;
+      } catch (_) {}
+      const theme = mode === 'auto' ? (themeMedia.matches ? 'light' : 'dark') : mode;
+      document.documentElement.dataset.themeMode = mode;
       document.documentElement.dataset.theme = theme;
       document.documentElement.style.colorScheme = theme;
       document.getElementById('themeColor').content = theme === 'light' ? '#f4f6fb' : '#07080d';
@@ -150,10 +149,12 @@
       transition:border-color .18s ease,background .18s ease,color .18s ease;
     }
     .theme-toggle:hover{border-color:var(--teal);background:#151124;color:var(--text)}
-    .theme-indicator{width:8px;height:8px;border-radius:1px;background:#717b90;box-shadow:0 0 0 2px rgba(113,123,144,.14)}
-    .theme-label::after{content:"DARK"}
-    html[data-theme="light"] .theme-label::after{content:"LIGHT"}
-    html[data-theme="light"] .theme-indicator{background:#d69216;box-shadow:0 0 0 2px rgba(214,146,22,.15)}
+    .theme-indicator{width:8px;height:8px;border-radius:1px;background:var(--cyan);box-shadow:0 0 0 2px rgba(85,214,255,.14)}
+    .theme-label::after{content:"AUTO"}
+    html[data-theme-mode="dark"] .theme-label::after{content:"DARK"}
+    html[data-theme-mode="light"] .theme-label::after{content:"LIGHT"}
+    html[data-theme-mode="dark"] .theme-indicator{background:#717b90;box-shadow:0 0 0 2px rgba(113,123,144,.14)}
+    html[data-theme-mode="light"] .theme-indicator{background:#d69216;box-shadow:0 0 0 2px rgba(214,146,22,.15)}
 
     /* hero */
     .hero{padding:60px 0 42px;min-height:0;display:grid;align-items:center}
@@ -437,7 +438,7 @@
         <a href="#examples">Examples</a>
       </div>
       <div class="nav-actions">
-        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to light mode" aria-pressed="false" title="Switch to light mode">
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Theme mode: auto. Switch to light mode" title="Theme mode: auto">
           <span class="theme-indicator" aria-hidden="true"></span>
           <span class="theme-label" aria-hidden="true"></span>
         </button>
@@ -764,35 +765,50 @@ COUNT  FIRST     LAST      SOURCE              ALERT
     const themeMedia = window.matchMedia('(prefers-color-scheme: light)');
     const themeToggle = document.getElementById('themeToggle');
 
-    function storedTheme(){
+    function storedThemeMode(){
       try {
         const theme = localStorage.getItem('logc-theme');
-        return theme === 'light' || theme === 'dark' ? theme : null;
+        return theme === 'light' || theme === 'dark' ? theme : 'auto';
       } catch (_) {
-        return null;
+        return 'auto';
       }
     }
 
-    function applyTheme(theme, persist){
+    function systemTheme(){
+      return themeMedia.matches ? 'light' : 'dark';
+    }
+
+    function applyTheme(theme){
       const isLight = theme === 'light';
       document.documentElement.dataset.theme = theme;
       document.documentElement.style.colorScheme = theme;
       document.getElementById('themeColor').content = isLight ? '#f4f6fb' : '#07080d';
-      themeToggle.setAttribute('aria-pressed', String(isLight));
-      themeToggle.setAttribute('aria-label', isLight ? 'Switch to dark mode' : 'Switch to light mode');
-      themeToggle.title = isLight ? 'Switch to dark mode' : 'Switch to light mode';
+    }
+
+    function applyThemeMode(mode, persist){
+      const nextMode = {auto: 'light', light: 'dark', dark: 'auto'}[mode];
+      document.documentElement.dataset.themeMode = mode;
+      applyTheme(mode === 'auto' ? systemTheme() : mode);
+      themeToggle.setAttribute('aria-label', `Theme mode: ${mode}. Switch to ${nextMode} mode`);
+      themeToggle.title = `Theme mode: ${mode}`;
       if (persist) {
-        try { localStorage.setItem('logc-theme', theme); } catch (_) {}
+        try {
+          if (mode === 'auto') localStorage.removeItem('logc-theme');
+          else localStorage.setItem('logc-theme', mode);
+        } catch (_) {}
       }
     }
 
-    applyTheme(document.documentElement.dataset.theme, false);
+    applyThemeMode(document.documentElement.dataset.themeMode || storedThemeMode(), false);
     themeToggle.addEventListener('click', () => {
-      applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light', true);
+      const mode = document.documentElement.dataset.themeMode;
+      applyThemeMode({auto: 'light', light: 'dark', dark: 'auto'}[mode], true);
     });
-    themeMedia.addEventListener('change', event => {
-      if (!storedTheme()) applyTheme(event.matches ? 'light' : 'dark', false);
-    });
+    const handleSystemThemeChange = () => {
+      if (document.documentElement.dataset.themeMode === 'auto') applyTheme(systemTheme());
+    };
+    if (themeMedia.addEventListener) themeMedia.addEventListener('change', handleSystemThemeChange);
+    else themeMedia.addListener(handleSystemThemeChange);
 
     function copyInstall(button){
       const text = document.getElementById('installText').textContent;
