@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -18,7 +18,23 @@
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="logc: One command for local logs" />
   <meta name="twitter:description" content="A recent-first, open-source SRE CLI for discovering, searching, and following local logs." />
-  <meta name="theme-color" content="#07080d" />
+  <meta id="themeColor" name="theme-color" content="#07080d" />
+  <script>
+    (() => {
+      let theme = 'dark';
+      try {
+        const savedTheme = localStorage.getItem('logc-theme');
+        theme = savedTheme === 'light' || savedTheme === 'dark'
+          ? savedTheme
+          : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      } catch (_) {
+        theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      }
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+      document.getElementById('themeColor').content = theme === 'light' ? '#f4f6fb' : '#07080d';
+    })();
+  </script>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -61,7 +77,8 @@
     }
 
     *{box-sizing:border-box}
-    html{scroll-behavior:smooth}
+    html{scroll-behavior:smooth;color-scheme:dark}
+    html[data-theme="light"]{color-scheme:light}
     body{
       margin:0;
       color:var(--text);
@@ -125,6 +142,18 @@
     }
     .btn.outline{border-color:rgba(167,120,255,.54);color:var(--teal-2);background:rgba(167,120,255,.06)}
     .small-link{font:600 12px/1 var(--mono);color:#b7becc}
+    .theme-toggle{
+      display:inline-flex;align-items:center;gap:8px;min-width:72px;
+      border:1px solid var(--line);border-radius:4px;padding:9px 10px;
+      color:#aeb5c5;background:#0c0e16;cursor:pointer;
+      font:700 10px/1 var(--mono);letter-spacing:.06em;
+      transition:border-color .18s ease,background .18s ease,color .18s ease;
+    }
+    .theme-toggle:hover{border-color:var(--teal);background:#151124;color:var(--text)}
+    .theme-indicator{width:8px;height:8px;border-radius:1px;background:#717b90;box-shadow:0 0 0 2px rgba(113,123,144,.14)}
+    .theme-label::after{content:"DARK"}
+    html[data-theme="light"] .theme-label::after{content:"LIGHT"}
+    html[data-theme="light"] .theme-indicator{background:#d69216;box-shadow:0 0 0 2px rgba(214,146,22,.15)}
 
     /* hero */
     .hero{padding:60px 0 42px;min-height:0;display:grid;align-items:center}
@@ -268,7 +297,84 @@
     .footer-resources a{color:#bba6d8;font:11px/1.35 var(--mono)}
     .ascii{font:9px/1.08 var(--mono);color:rgba(167,120,255,.35);white-space:pre;margin-top:18px}
 
-    @media (prefers-reduced-motion:reduce){.btn,.card{transition:none}}
+    /* light theme */
+    html[data-theme="light"]{
+      --bg:#f4f6fb;
+      --bg-2:#edf0f7;
+      --panel:#ffffff;
+      --panel-2:#f4f1fb;
+      --line:rgba(39,46,63,.15);
+      --line-strong:rgba(102,62,189,.42);
+      --text:#171a24;
+      --muted:#596276;
+      --teal:#6e3ac8;
+      --teal-2:#5826ad;
+      --cyan:#087c9f;
+      --green:#13764d;
+      --yellow:#8b5b00;
+      --red:#c52c4c;
+      --shadow:0 22px 56px rgba(38,43,60,.14),0 0 0 1px rgba(93,55,170,.06);
+    }
+    html[data-theme="light"] body{
+      background:
+        radial-gradient(circle at 50% -8%,rgba(116,67,211,.10),transparent 31rem),
+        linear-gradient(rgba(53,62,84,.075) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(53,62,84,.075) 1px,transparent 1px),
+        var(--bg);
+      background-size:auto,32px 32px,32px 32px,auto;
+    }
+    html[data-theme="light"] body::before{background:linear-gradient(to bottom,rgba(42,47,61,.025),transparent 1px);mix-blend-mode:multiply}
+    html[data-theme="light"] ::selection{background:rgba(110,58,200,.22);color:#17121f}
+    html[data-theme="light"] .nav{background:rgba(247,248,252,.92)}
+    html[data-theme="light"] .nav-links,
+    html[data-theme="light"] .small-link{color:#4f586b}
+    html[data-theme="light"] .btn,
+    html[data-theme="light"] .theme-toggle{background:#fff;color:#332a43}
+    html[data-theme="light"] .btn:hover,
+    html[data-theme="light"] .theme-toggle:hover{background:#f1ecfb;color:#1b1426}
+    html[data-theme="light"] .btn.primary{color:#fff;background:var(--teal-2)}
+    html[data-theme="light"] .btn.outline{background:rgba(110,58,200,.05);color:var(--teal-2)}
+    html[data-theme="light"] h1 span{text-shadow:0 0 22px rgba(110,58,200,.10)}
+    html[data-theme="light"] .hero-copy p{color:#4f596c}
+    html[data-theme="light"] .hero-install{background:#fff}
+    html[data-theme="light"] .hero-install code{color:#2d2638}
+    html[data-theme="light"] .hero-install-note{color:#687287}
+    html[data-theme="light"] .trust{color:#5e687b}
+    html[data-theme="light"] .terminal{background:#fff}
+    html[data-theme="light"] .terminal::after{color:#626d80}
+    html[data-theme="light"] .terminal-head{background:#eef1f7;color:#606b7e}
+    html[data-theme="light"] .terminal-title{color:#536075}
+    html[data-theme="light"] .terminal-body{color:#343b4a}
+    html[data-theme="light"] .prompt{color:#6e3ac8}
+    html[data-theme="light"] .cmd{color:#171a24}
+    html[data-theme="light"] .path{color:#6e3ac8}
+    html[data-theme="light"] .dim{color:#6e7789}
+    html[data-theme="light"] .statusline{color:#606b7e}
+    html[data-theme="light"] .section-title::before{color:#8992a5}
+    html[data-theme="light"] .beforeafter{background:#fff;box-shadow:0 16px 42px rgba(39,45,62,.10)}
+    html[data-theme="light"] .ba-card{background:#f8f9fc}
+    html[data-theme="light"] .ba-card.before{color:#a92544}
+    html[data-theme="light"] .ba-card.after{color:#116a45}
+    html[data-theme="light"] .arrow{color:#76698e}
+    html[data-theme="light"] .ba-caption{color:#657084}
+    html[data-theme="light"] #features{background:rgba(238,241,248,.82)}
+    html[data-theme="light"] .card{background:rgba(255,255,255,.96)}
+    html[data-theme="light"] .card:hover{background:#faf8ff}
+    html[data-theme="light"] .icon{background:#f2edfb}
+    html[data-theme="light"] .feature h3{color:#3d2e58}
+    html[data-theme="light"] .feature p{color:#596276}
+    html[data-theme="light"] .example-label{color:#262b37}
+    html[data-theme="light"] .example-when{color:#616b7e}
+    html[data-theme="light"] .badge{background:#f0eafa}
+    html[data-theme="light"] .mini-terminal{background:#f8f9fc;color:#343b4a}
+    html[data-theme="light"] footer{background:#eef1f7}
+    html[data-theme="light"] .footer-heading{color:#554369}
+    html[data-theme="light"] .footer-links{color:#4d5668}
+    html[data-theme="light"] .footer-note{color:#677184}
+    html[data-theme="light"] .footer-resources a{color:#5e477c}
+    html[data-theme="light"] .ascii{color:rgba(89,46,172,.34)}
+
+    @media (prefers-reduced-motion:reduce){.btn,.card,.theme-toggle{transition:none}}
 
     /* responsive */
     @media (max-width:980px){
@@ -294,6 +400,8 @@
       .wrap{width:min(100% - 32px,1240px)}
       .nav-inner{height:56px;gap:12px}
       .small-link{display:none}
+      .theme-toggle{min-width:36px;padding:9px}
+      .theme-label{display:none}
       .btn{padding:10px 13px}
       .brand{font-size:22px}
       h1{font-size:52px}
@@ -329,6 +437,10 @@
         <a href="#examples">Examples</a>
       </div>
       <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to light mode" aria-pressed="false" title="Switch to light mode">
+          <span class="theme-indicator" aria-hidden="true"></span>
+          <span class="theme-label" aria-hidden="true"></span>
+        </button>
         <a class="btn outline" href="#install">Install</a>
         <a class="small-link" href="https://github.com/debugc-clis/logc" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a>
       </div>
@@ -649,6 +761,39 @@ COUNT  FIRST     LAST      SOURCE              ALERT
   </footer>
 
   <script>
+    const themeMedia = window.matchMedia('(prefers-color-scheme: light)');
+    const themeToggle = document.getElementById('themeToggle');
+
+    function storedTheme(){
+      try {
+        const theme = localStorage.getItem('logc-theme');
+        return theme === 'light' || theme === 'dark' ? theme : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function applyTheme(theme, persist){
+      const isLight = theme === 'light';
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+      document.getElementById('themeColor').content = isLight ? '#f4f6fb' : '#07080d';
+      themeToggle.setAttribute('aria-pressed', String(isLight));
+      themeToggle.setAttribute('aria-label', isLight ? 'Switch to dark mode' : 'Switch to light mode');
+      themeToggle.title = isLight ? 'Switch to dark mode' : 'Switch to light mode';
+      if (persist) {
+        try { localStorage.setItem('logc-theme', theme); } catch (_) {}
+      }
+    }
+
+    applyTheme(document.documentElement.dataset.theme, false);
+    themeToggle.addEventListener('click', () => {
+      applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light', true);
+    });
+    themeMedia.addEventListener('change', event => {
+      if (!storedTheme()) applyTheme(event.matches ? 'light' : 'dark', false);
+    });
+
     function copyInstall(button){
       const text = document.getElementById('installText').textContent;
       navigator.clipboard.writeText(text).then(() => {
