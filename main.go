@@ -22,7 +22,7 @@ USAGE
   logc                         Discover and follow the latest application logs
   logc TARGET                  Follow a log source (name, path, dir, glob, @process, @PID, :port)
   logc TARGET REGEX            Search that source (regex; searches recent rotated logs too)
-  logc REGEX                   Search all default application logs
+  logc REGEX                   Search recent default application logs
   logc TARGET REGEX -f         Search existing logs, then keep following matching lines
   logc watch REGEX [TARGET...] Show a real-time aggregated alert view
   logc system [REGEX]          Search/highlight and follow operating-system logs
@@ -36,6 +36,7 @@ EXAMPLES
   logc api 'timeout|reset'
   logc ERROR
   logc api ERROR --since 30m
+  logc api ERROR --all
   logc api ERROR -C 3
   logc api ERROR -f
   logc watch ERROR
@@ -56,6 +57,7 @@ EXAMPLES
 SMALL SET OF OPTIONAL FLAGS
   -f                  Keep following after a search
   --since DURATION    Search/view recent time, e.g. 10m, 2h, 7d, today
+  --all               Search all available history instead of the recent window
   -C N                Show N context lines around a match
   -i                  Case-insensitive regex
   -n N                Initial lines per file (default 10)
@@ -93,6 +95,7 @@ type cliOptions struct {
 	JSON        bool
 	CurrentOnly bool
 	Full        bool
+	All         bool
 	Match       string
 	Excludes    []string
 	Categories  []string
@@ -152,6 +155,8 @@ func parseCLI(args []string, cfg Config) (cliOptions, error) {
 			o.CurrentOnly = true
 		case "--full":
 			o.Full = true
+		case "--all":
+			o.All = true
 		case "-m", "--match":
 			v, err := next()
 			if err != nil {
@@ -272,6 +277,10 @@ func realMain() int {
 		out.errorf("%v", err)
 		return 2
 	}
+	if opts.All && opts.SinceRaw != "" {
+		out.errorf("--all and --since cannot be used together")
+		return 2
+	}
 
 	// First resolve only active logs so ordinary `logc api` never pulls rotated/.gz files.
 	resolved, queryPattern, err := interpretPositionals(cfg, opts.Positionals, opts.Match, false, since)
@@ -282,7 +291,11 @@ func realMain() int {
 	if queryPattern != "" {
 		queryPattern = severityPattern(queryPattern)
 	}
-	if queryPattern != "" && since.IsZero() {
+	if opts.All && queryPattern == "" {
+		out.errorf("--all requires a search expression")
+		return 2
+	}
+	if queryPattern != "" && since.IsZero() && !opts.All {
 		since = time.Now().Add(-cfg.Recent)
 	}
 	// Searches/time-range queries automatically include rotated and .gz logs unless --current is used.
@@ -302,6 +315,7 @@ func realMain() int {
 		out.errorf("%v", err)
 		return 2
 	}
+	q.All = opts.All
 
 	if resolved.JournalUnit != "" {
 		searchMode := q.Regex != nil || !q.Since.IsZero()
@@ -332,9 +346,7 @@ func realMain() int {
 
 	searchMode := q.Regex != nil || !q.Since.IsZero()
 	if searchMode {
-		if !opts.CurrentOnly {
-			sortHistorical(paths)
-		}
+		sortRecentFirst(paths)
 		matches := searchPaths(paths, q, out)
 		if q.Regex != nil {
 			out.infof("%d matching lines", matches)
@@ -381,10 +393,10 @@ func shouldFollow(opts cliOptions) bool {
 	return !opts.FollowSet || opts.Follow
 }
 
-func interpretPositionals(cfg Config, pos []string, explicitMatch string, includeHistory bool, since time.Time) (ResolvedTarget, string, error) {
+func interpretPositionals(cfg Config, pos []string, explicitMatch string, includeHistory bool, cutoff time.Time) (ResolvedTarget, string, error) {
 	if explicitMatch != "" {
 		if len(pos) == 0 {
-			r, err := resolveTarget(cfg, "", includeHistory)
+			r, err := resolveDefaultTarget(cfg, includeHistory, cutoff)
 			return r, explicitMatch, err
 		}
 		r, _, err := resolveLeadingTargets(cfg, pos, includeHistory)
@@ -394,11 +406,11 @@ func interpretPositionals(cfg Config, pos []string, explicitMatch string, includ
 		return r, explicitMatch, nil
 	}
 	if len(pos) == 0 {
-		r, err := resolveTarget(cfg, "", includeHistory && !since.IsZero())
+		r, err := resolveDefaultTarget(cfg, includeHistory, cutoff)
 		return r, "", err
 	}
 	if len(pos) == 1 && looksLikeSearchExpression(pos[0]) {
-		r, err := resolveTarget(cfg, "", includeHistory)
+		r, err := resolveDefaultTarget(cfg, includeHistory, cutoff)
 		return r, pos[0], err
 	}
 	// A search-looking token after one or more sources wins over fuzzy source discovery.
@@ -425,7 +437,7 @@ func interpretPositionals(cfg Config, pos []string, explicitMatch string, includ
 	}
 
 	// Nothing looked like a source: make the whole expression a search over default logs.
-	r, e := resolveTarget(cfg, "", true)
+	r, e := resolveDefaultTarget(cfg, true, cutoff)
 	if e != nil {
 		return ResolvedTarget{}, "", e
 	}
@@ -545,7 +557,7 @@ func systemCommand(args []string) int {
 			continue
 		}
 		if arg == "-h" || arg == "--help" || arg == "help" {
-			fmt.Fprintln(os.Stderr, "logc: usage: logc system [REGEX] [--kernel] [--since DURATION] [-n LINES] [-i] [-C N] [--dedup] [--json]")
+			fmt.Fprintln(os.Stderr, "logc: usage: logc system [REGEX] [--kernel] [--since DURATION | --all] [-n LINES] [-i] [-C N] [--dedup] [--json]")
 			return 0
 		}
 		filteredArgs = append(filteredArgs, arg)
@@ -565,11 +577,20 @@ func systemCommand(args []string) int {
 		fmt.Fprintln(os.Stderr, "logc system:", err)
 		return 2
 	}
+	if opts.All && opts.SinceRaw != "" {
+		fmt.Fprintln(os.Stderr, "logc system: --all and --since cannot be used together")
+		return 2
+	}
+	if opts.All && pattern == "" {
+		fmt.Fprintln(os.Stderr, "logc system: --all requires a search expression")
+		return 2
+	}
 	query, err := buildQuery(pattern, opts.IgnoreCase, since, opts.Context, opts.Context, opts.Dedup, cfg.IgnoreLines)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "logc system:", err)
 		return 2
 	}
+	query.All = opts.All
 	lines := max(opts.Lines, 50)
 	out := newPrinter(cfg.Color && !opts.NoColor && !opts.JSON)
 	out.sourceMeta = func(string) (string, string) { return "system", "host" }

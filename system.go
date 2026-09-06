@@ -20,6 +20,12 @@ func runSystemLogs(ctx context.Context, lines int, kernelOnly bool) error {
 }
 
 func systemLogsCommand(ctx context.Context, lines int, kernelOnly bool, query Query) (*exec.Cmd, error) {
+	if query.All && runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("--all system-log search requires journald on Linux")
+	}
+	if query.All && kernelOnly {
+		return nil, fmt.Errorf("--all is not supported with kernel-only logs")
+	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "linux":
@@ -31,12 +37,16 @@ func systemLogsCommand(ctx context.Context, lines int, kernelOnly bool, query Qu
 			}
 		} else if path, err := exec.LookPath("journalctl"); err == nil {
 			args := []string{"--follow", "--output", "short-iso", "--no-pager"}
-			if query.Since.IsZero() {
-				args = append(args, "--lines", fmt.Sprint(lines))
-			} else {
-				args = append(args, "--since", query.Since.Format("2006-01-02 15:04:05"))
+			if !query.All {
+				if query.Since.IsZero() {
+					args = append(args, "--lines", fmt.Sprint(lines))
+				} else {
+					args = append(args, "--since", query.Since.Format("2006-01-02 15:04:05"))
+				}
 			}
 			cmd = exec.CommandContext(ctx, path, args...)
+		} else if query.All {
+			return nil, fmt.Errorf("journalctl is required for --all system-log search")
 		} else if path, err := exec.LookPath("dmesg"); err == nil {
 			cmd = exec.CommandContext(ctx, path, "--follow", "--human")
 		} else {
@@ -71,10 +81,12 @@ func unitCommand(ctx context.Context, unit string, lines int, follow bool, q Que
 		return nil, fmt.Errorf("journalctl not found")
 	}
 	args := []string{"-u", unit, "--output", "short-iso", "--no-pager"}
-	if !q.Since.IsZero() {
-		args = append(args, "--since", q.Since.Format("2006-01-02 15:04:05"))
-	} else {
-		args = append(args, "--lines", fmt.Sprint(lines))
+	if !q.All {
+		if !q.Since.IsZero() {
+			args = append(args, "--since", q.Since.Format("2006-01-02 15:04:05"))
+		} else {
+			args = append(args, "--lines", fmt.Sprint(lines))
+		}
 	}
 	if follow {
 		args = append(args, "--follow")

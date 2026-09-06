@@ -108,6 +108,45 @@ func TestParseYearlessSyslogTimestampAcrossNewYear(t *testing.T) {
 	}
 }
 
+func TestScanLogPathSkipsFilesOlderThanSince(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.log")
+	if err := os.WriteFile(path, []byte("2026-08-01 10:00:00 ERROR old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Date(2026, time.August, 1, 10, 0, 0, 0, time.Local)
+	if err := os.Chtimes(path, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	query, err := buildQuery("ERROR", false, oldTime.Add(time.Hour), 0, 0, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines, matches, err := scanLogPath(path, query)
+	if err != nil || matches != 0 || len(lines) != 0 {
+		t.Fatalf("lines=%#v matches=%d err=%v", lines, matches, err)
+	}
+}
+
+func TestSortRecentFirst(t *testing.T) {
+	directory := t.TempDir()
+	oldPath := filepath.Join(directory, "old.log")
+	newPath := filepath.Join(directory, "new.log")
+	for _, path := range []string{oldPath, newPath} {
+		if err := os.WriteFile(path, []byte("INFO event\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldTime := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(oldPath, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{oldPath, newPath}
+	sortRecentFirst(paths)
+	if paths[0] != newPath {
+		t.Fatalf("paths=%#v", paths)
+	}
+}
+
 func TestScanLogPathSearchesCompleteRegularAndGzipFiles(t *testing.T) {
 	directory := t.TempDir()
 	query, err := buildQuery("needle", false, time.Time{}, 0, 0, false, nil)

@@ -38,21 +38,7 @@ func looksLikePath(s string) bool {
 
 func resolveTarget(cfg Config, raw string, includeHistory bool) (ResolvedTarget, error) {
 	if raw == "" {
-		if includeHistory {
-			result := collectLogCandidatesDetailed(cfg.DefaultLogDirs, cfg.Excludes, time.Time{}, true)
-			limit := cfg.MaxFiles * 5
-			if limit < cfg.MaxFiles {
-				limit = cfg.MaxFiles
-			}
-			cs := selectFairCandidates(result.Candidates, limit)
-			paths := make([]string, 0, len(cs))
-			for _, c := range cs {
-				paths = append(paths, c.Path)
-			}
-			return ResolvedTarget{Name: "default", Paths: paths, Patterns: cfg.DefaultLogDirs, Warnings: result.Warnings, DefaultDiscovery: true}, nil
-		}
-		paths, warnings, err := discoverDefaultDetailed(cfg)
-		return ResolvedTarget{Name: "default", Paths: paths, Patterns: cfg.DefaultLogDirs, Warnings: warnings, DefaultDiscovery: true}, err
+		return resolveDefaultTarget(cfg, includeHistory, time.Time{})
 	}
 	if pats, ok := cfg.Groups[raw]; ok {
 		paths, err := resolvePatternsWithHistory(pats, cfg.Excludes, includeHistory)
@@ -121,6 +107,31 @@ func resolveTarget(cfg Config, raw string, includeHistory bool) (ResolvedTarget,
 		return ResolvedTarget{Name: raw, Paths: paths, Patterns: paths}, nil
 	}
 	return ResolvedTarget{}, fmt.Errorf("no log source matched %q", raw)
+}
+
+func resolveDefaultTarget(cfg Config, includeHistory bool, cutoff time.Time) (ResolvedTarget, error) {
+	if includeHistory {
+		result := collectLogCandidatesDetailed(cfg.DefaultLogDirs, cfg.Excludes, cutoff, true)
+		candidates := result.Candidates
+		warnings := result.Warnings
+		if !cutoff.IsZero() {
+			limit := cfg.MaxFiles * 5
+			if limit < cfg.MaxFiles {
+				limit = cfg.MaxFiles
+			}
+			if len(candidates) > limit {
+				warnings = append(warnings, fmt.Sprintf("recent search found %d files; searching %d fairly selected candidates (increase max_files or narrow the target)", len(candidates), limit))
+			}
+			candidates = selectFairCandidates(candidates, limit)
+		}
+		paths := make([]string, 0, len(candidates))
+		for _, candidate := range candidates {
+			paths = append(paths, candidate.Path)
+		}
+		return ResolvedTarget{Name: "default", Paths: paths, Patterns: cfg.DefaultLogDirs, Warnings: warnings, DefaultDiscovery: true}, nil
+	}
+	paths, warnings, err := discoverDefaultDetailed(cfg)
+	return ResolvedTarget{Name: "default", Paths: paths, Patterns: cfg.DefaultLogDirs, Warnings: warnings, DefaultDiscovery: true}, err
 }
 
 func expandRotatedSiblings(paths, excludes []string) []string {

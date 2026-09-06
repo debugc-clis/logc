@@ -21,6 +21,7 @@ type Query struct {
 	Before        int
 	After         int
 	Dedup         bool
+	All           bool
 }
 
 func buildQuery(pattern string, ignoreCase bool, since time.Time, before, after int, dedup bool, ignoreLines []string) (Query, error) {
@@ -219,6 +220,9 @@ func scanLogPathEach(path string, q Query, emit func(string)) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	if !q.Since.IsZero() && fileInfo.ModTime().Before(q.Since) {
+		return 0, nil
+	}
 	reader, err := openLogReader(path)
 	if err != nil {
 		return 0, err
@@ -393,5 +397,19 @@ func sortHistorical(paths []string) {
 			return paths[i] < paths[j]
 		}
 		return a.ModTime().Before(b.ModTime())
+	})
+}
+
+func sortRecentFirst(paths []string) {
+	sort.Slice(paths, func(i, j int) bool {
+		left, _ := os.Stat(paths[i])
+		right, _ := os.Stat(paths[j])
+		if left == nil || right == nil {
+			return paths[i] < paths[j]
+		}
+		if left.ModTime().Equal(right.ModTime()) {
+			return paths[i] < paths[j]
+		}
+		return left.ModTime().After(right.ModTime())
 	})
 }

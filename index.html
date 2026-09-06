@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>logc: SRE Log CLI for Finding, Searching &amp; Following Logs</title>
-  <meta name="description" content="logc is a free, open-source SRE CLI for discovering, searching, and following local application and system logs on Linux and macOS." />
+  <meta name="description" content="logc is a free, open-source SRE CLI that discovers local logs, searches the latest events first, and follows application and system logs on Linux and macOS." />
   <meta name="author" content="logc contributors" />
   <meta name="application-name" content="logc" />
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1" />
@@ -12,13 +12,13 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="logc" />
   <meta property="og:title" content="logc: One command for local logs" />
-  <meta property="og:description" content="Find, search, and follow logs without remembering paths or chaining shell commands." />
+  <meta property="og:description" content="Discover local logs, search the latest events first, and follow live output without chaining shell commands." />
   <meta property="og:url" content="https://logc.com/" />
   <meta property="og:locale" content="en_US" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="logc: One command for local logs" />
-  <meta name="twitter:description" content="A free, open-source SRE CLI for discovering, searching, and following local logs." />
-  <meta name="theme-color" content="#0b0718" />
+  <meta name="twitter:description" content="A recent-first, open-source SRE CLI for discovering, searching, and following local logs." />
+  <meta name="theme-color" content="#07080d" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -26,7 +26,7 @@
     "name": "logc",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Linux, macOS",
-    "description": "A free, open-source command-line tool for discovering, searching, and following local application and system logs.",
+    "description": "A free, open-source command-line tool that discovers local logs, searches recent events first, and follows application and system logs.",
     "url": "https://logc.com/",
     "downloadUrl": "https://github.com/debugc-clis/logc/releases",
     "codeRepository": "https://github.com/debugc-clis/logc",
@@ -40,22 +40,22 @@
   </script>
   <style>
     :root{
-      --bg:#080611;
-      --bg-2:#100a24;
-      --panel:#120c25;
-      --panel-2:#18102e;
-      --line:rgba(202,172,255,.16);
-      --line-strong:rgba(211,184,255,.33);
-      --text:#f6f1ff;
-      --muted:#b8aecb;
-      --teal:#ad63ff;
-      --teal-2:#ddc1ff;
-      --cyan:#59d9ff;
-      --green:#72f4c2;
-      --yellow:#ffd26c;
-      --red:#ff6d9d;
-      --shadow:0 26px 90px rgba(0,0,0,.48),0 0 60px rgba(119,72,255,.08);
-      --radius:18px;
+      --bg:#07080d;
+      --bg-2:#0b0d14;
+      --panel:#0d1018;
+      --panel-2:#111521;
+      --line:rgba(154,166,194,.16);
+      --line-strong:rgba(175,140,255,.44);
+      --text:#edf0f7;
+      --muted:#98a0b3;
+      --teal:#a778ff;
+      --teal-2:#d2bdff;
+      --cyan:#55d6ff;
+      --green:#5fe0a4;
+      --yellow:#f3c969;
+      --red:#ff6685;
+      --shadow:0 24px 70px rgba(0,0,0,.44),0 0 0 1px rgba(167,120,255,.05);
+      --radius:7px;
       --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
       --sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     }
@@ -67,113 +67,110 @@
       color:var(--text);
       font-family:var(--sans);
       background:
-        radial-gradient(circle at 48% 4%, rgba(161,83,255,.20), transparent 26rem),
-        radial-gradient(circle at 92% 26%, rgba(59,205,255,.12), transparent 22rem),
-        radial-gradient(circle at 8% 56%, rgba(255,87,190,.08), transparent 23rem),
-        linear-gradient(rgba(174,126,255,.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(174,126,255,.035) 1px, transparent 1px),
+        radial-gradient(circle at 50% -8%, rgba(133,85,255,.13), transparent 31rem),
+        linear-gradient(rgba(126,138,168,.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(126,138,168,.045) 1px, transparent 1px),
         var(--bg);
-      background-size:auto,auto,42px 42px,42px 42px,auto;
+      background-size:auto,32px 32px,32px 32px,auto;
       line-height:1.55;
     }
     body::before{
       content:"";
       position:fixed; inset:0; pointer-events:none; z-index:20;
-      background:linear-gradient(to bottom,rgba(255,255,255,.012),transparent 1px);
-      background-size:100% 5px;
-      opacity:.14;
+      background:linear-gradient(to bottom,rgba(255,255,255,.018),transparent 1px);
+      background-size:100% 4px;
+      opacity:.12;
       mix-blend-mode:screen;
     }
     ::selection{background:rgba(185,121,255,.38);color:#fff}
     a{color:inherit;text-decoration:none}
     button{font:inherit}
-    .wrap{width:min(1240px,calc(100% - 56px));margin:auto}
+    .wrap{width:min(1180px,calc(100% - 56px));margin:auto}
     .muted{color:var(--muted)}
     .teal{color:var(--teal)}
     .mono{font-family:var(--mono)}
     .eyebrow{
-      font-size:12px; letter-spacing:.14em; text-transform:uppercase;
-      color:var(--teal); font-weight:800;
+      font:700 11px/1.4 var(--mono);letter-spacing:.13em;text-transform:uppercase;
+      color:var(--teal);display:flex;align-items:center;gap:9px;
     }
+    .eyebrow::before{content:"//";color:var(--cyan);letter-spacing:-.14em}
 
     /* nav */
     .nav{
       position:sticky;top:0;z-index:30;
-      background:rgba(9,5,20,.78);
-      backdrop-filter:blur(18px);
+      background:rgba(7,8,13,.90);
+      backdrop-filter:blur(14px);
       border-bottom:1px solid var(--line);
     }
-    .nav-inner{height:64px;display:flex;align-items:center;gap:28px}
+    .nav-inner{height:58px;display:flex;align-items:center;gap:28px}
     .brand{
       display:inline-flex;align-items:center;gap:10px;
-      font:800 27px/1 var(--mono); color:var(--teal);
-      letter-spacing:-.05em; margin-right:auto;
+      font:800 24px/1 var(--mono);color:var(--text);
+      letter-spacing:-.05em;margin-right:auto;
     }
-    .brand-mark{font-size:22px;color:var(--teal-2)}
-    .nav-links{display:flex;gap:30px;color:#c8d1ce;font-size:14px}
+    .brand-mark{font-size:19px;color:var(--teal)}
+    .nav-links{display:flex;gap:28px;color:#aeb5c5;font:600 12px/1 var(--mono);text-transform:uppercase;letter-spacing:.06em}
     .nav-links a:hover,.small-link:hover{color:var(--teal-2)}
     .nav-actions{display:flex;align-items:center;gap:15px}
     .btn{
       display:inline-flex;align-items:center;justify-content:center;gap:9px;
-      border:1px solid var(--line-strong); border-radius:10px;
-      padding:11px 17px; font-size:14px; font-weight:700;
-      background:rgba(255,255,255,.035); color:#f5efff;
-      transition:.18s ease; cursor:pointer;
+      border:1px solid var(--line-strong);border-radius:4px;
+      padding:10px 15px;font:700 12px/1.2 var(--mono);letter-spacing:.02em;
+      background:#0c0e16;color:#eae5f5;
+      transition:border-color .18s ease,background .18s ease,color .18s ease;cursor:pointer;
     }
-    .btn:hover{border-color:rgba(210,180,255,.8);transform:translateY(-2px);box-shadow:0 10px 28px rgba(143,77,255,.18)}
+    .btn:hover{border-color:var(--teal);background:#151124;color:#fff}
     .btn.primary{
-      color:#120622;background:linear-gradient(135deg,#dfb8ff 0%,#a855f7 48%,#6f72ff 100%);
-      border-color:transparent; box-shadow:0 10px 32px rgba(168,85,247,.34);
+      color:#0a0710;background:var(--teal-2);border-color:var(--teal-2);box-shadow:none;
     }
-    .btn.outline{border-color:rgba(191,146,255,.56);color:var(--teal-2);background:rgba(168,85,247,.09)}
-    .small-link{font-size:14px;color:#d3c8e4}
+    .btn.outline{border-color:rgba(167,120,255,.54);color:var(--teal-2);background:rgba(167,120,255,.06)}
+    .small-link{font:600 12px/1 var(--mono);color:#b7becc}
 
     /* hero */
-    .hero{padding:64px 0 46px;min-height:0;display:grid;align-items:center}
-    .hero-grid{display:grid;grid-template-columns:.88fr 1.12fr;gap:54px;align-items:center}
+    .hero{padding:60px 0 42px;min-height:0;display:grid;align-items:center}
+    .hero-grid{display:grid;grid-template-columns:.84fr 1.16fr;gap:52px;align-items:center}
     h1{
-      font-size:clamp(48px,7vw,79px);
-      line-height:1.04;letter-spacing:-.055em;margin:0 0 24px;padding-bottom:.04em;font-weight:820;
+      font-size:clamp(46px,6.3vw,70px);
+      line-height:1.03;letter-spacing:-.052em;margin:12px 0 22px;padding-bottom:.12em;font-weight:780;
     }
     h1 span{
-      display:block;line-height:1.1;padding-bottom:.08em;
-      color:#cf9cff;text-shadow:0 0 28px rgba(181,104,255,.28);
+      display:block;line-height:1.12;padding-bottom:.14em;
+      color:var(--teal-2);text-shadow:0 0 22px rgba(167,120,255,.17);
     }
     .hero-copy p{
-      color:#d2c8df; font-size:17px; max-width:570px; margin:0 0 28px;
+      color:#b5bdcd;font-size:16px;max-width:570px;margin:0 0 26px;
     }
     .hero-install-row{display:flex;align-items:flex-start;gap:12px;margin-top:16px}
     .hero-actions{display:flex;gap:14px;flex-wrap:wrap}
     .hero-install-wrap{width:280px;flex:0 1 280px}
     .hero-install{
       display:flex;align-items:center;gap:12px;width:100%;
-      padding:10px 12px 10px 14px;border:1px solid rgba(191,146,255,.34);border-radius:11px;
-      background:rgba(15,9,31,.72);box-shadow:inset 0 1px rgba(255,255,255,.03);
+      padding:10px 12px 10px 14px;border:1px solid rgba(167,120,255,.38);border-radius:4px;
+      background:#090b11;box-shadow:inset 3px 0 var(--teal);
     }
     .hero-install code{min-width:0;overflow:auto;white-space:nowrap;color:#f0e3ff;font:13px var(--mono)}
     .hero-install .copy{margin-left:auto}
-    .hero-install-note{margin:7px 2px 0;color:#9185a5;font-size:11px}
-    .trust{margin-top:18px;display:flex;gap:18px;flex-wrap:wrap;color:#8fa09a;font-size:12px}
-    .trust span::before{content:"•";color:var(--teal);margin-right:7px}
-    .trust span:first-child::before{content:"◌"}
+    .hero-install-note{margin:7px 2px 0;color:#737c90;font:10px/1.5 var(--mono)}
+    .trust{margin-top:18px;display:flex;gap:17px;flex-wrap:wrap;color:#7f899c;font:10px/1.4 var(--mono);text-transform:uppercase;letter-spacing:.05em}
+    .trust span::before{content:"[+]";color:var(--green);margin-right:7px}
 
     /* terminal */
     .terminal{
-      background:linear-gradient(180deg,rgba(20,13,40,.98),rgba(8,6,18,.98));
-      border:1px solid rgba(204,173,255,.28);
-      border-radius:15px;overflow:hidden;box-shadow:var(--shadow);
+      position:relative;background:#080a0f;
+      border:1px solid rgba(167,120,255,.32);
+      border-radius:6px;overflow:hidden;box-shadow:var(--shadow);
     }
+    .terminal::after{content:"LIVE SESSION";position:absolute;right:14px;top:12px;color:#697287;font:700 9px/1 var(--mono);letter-spacing:.1em}
     .terminal-head{
-      height:39px;display:flex;align-items:center;gap:7px;padding:0 13px;
-      border-bottom:1px solid rgba(255,255,255,.08);
-      background:linear-gradient(90deg,#1a1133,#151027);
-      color:#aaa0bd;font-size:12px;
+      height:36px;display:flex;align-items:center;gap:6px;padding:0 13px;
+      border-bottom:1px solid var(--line);
+      background:#0f121a;color:#8992a5;font:10px/1 var(--mono);
     }
-    .dot{width:10px;height:10px;border-radius:50%}
-    .dot.r{background:#ff625f}.dot.y{background:#f6c64f}.dot.g{background:#36c85f}
-    .terminal-title{margin-left:auto;margin-right:auto;transform:translateX(-25px)}
+    .dot{width:7px;height:7px;border-radius:1px}
+    .dot.r{background:#805069}.dot.y{background:#8f7b4e}.dot.g{background:#467c64}
+    .terminal-title{margin-left:5px;margin-right:auto;transform:none;color:#9ba4b6}
     .terminal-body{
-      font:12px/1.55 var(--mono);padding:22px 24px 20px;min-height:370px;
+      font:11.5px/1.58 var(--mono);padding:21px 23px 19px;min-height:370px;
       overflow:auto; color:#d5cce3;
     }
     .terminal-body pre,.mini-terminal pre,.beforeafter pre{margin:0;white-space:pre-wrap}
@@ -182,16 +179,17 @@
     .dim{color:#89809d}
     .statusline{
       display:flex;justify-content:space-between;gap:18px;padding-top:12px;margin-top:13px;
-      border-top:1px solid rgba(255,255,255,.10);font-size:11.5px;color:#aaa1bc;
+      border-top:1px solid var(--line);font-size:10.5px;color:#7f899d;
     }
 
     /* shared sections */
-    section{padding:60px 0;scroll-margin-top:64px}
+    section{padding:54px 0;scroll-margin-top:58px}
     .section-title{
-      font-size:34px;letter-spacing:-.03em;margin:0 0 26px;font-weight:780;
+      font-size:31px;letter-spacing:-.035em;margin:0 0 24px;font-weight:760;
     }
+    .section-title::before{content:"##";margin-right:10px;color:#596176;font:700 13px/1 var(--mono);letter-spacing:0;vertical-align:.24em}
     .section-title span{color:var(--teal)}
-    .section-intro{color:var(--muted);max-width:720px;margin:-14px 0 30px;font-size:16px}
+    .section-intro{color:var(--muted);max-width:720px;margin:-13px 0 27px;font-size:15px}
 
     /* comparison */
     .comparison{padding-top:4px}
@@ -201,57 +199,54 @@
 
     /* before after */
     .beforeafter{
-      margin-top:0;padding:24px;
+      margin-top:0;padding:20px;
       border:1px solid var(--line);border-radius:var(--radius);
-      background:linear-gradient(135deg,rgba(28,18,54,.92),rgba(10,7,22,.94));
-      box-shadow:0 18px 58px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.03);
+      background:#0b0d14;box-shadow:0 18px 48px rgba(0,0,0,.22);
     }
     .ba-grid{display:grid;grid-template-columns:1fr 72px 1fr;align-items:center;gap:30px}
-    .ba-title{font-size:18px;font-weight:800;margin-bottom:12px}
-    .ba-card{border:1px solid;border-radius:12px;padding:22px;background:rgba(6,4,14,.76);font:13px/1.7 var(--mono)}
+    .ba-title{font:700 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+    .ba-card{border:1px solid;border-radius:4px;padding:20px;background:#07090e;font:12px/1.7 var(--mono)}
     .ba-card.before{border-color:rgba(255,109,157,.55);color:#ff9bbb}
     .ba-card.after{border-color:rgba(114,244,194,.55);color:#93f8d2;min-height:142px;display:flex;align-items:center}
-    .arrow{text-align:center;font-size:34px;color:#c8a6f9}
-    .ba-caption{text-align:center;color:#b4a9c5;font-size:13px;margin-top:20px}
+    .arrow{text-align:center;font:400 28px/1 var(--mono);color:#786a91}
+    .ba-caption{text-align:center;color:#788195;font:11px/1.5 var(--mono);margin-top:17px}
 
     /* features */
     #features{
       position:relative;border-block:1px solid rgba(202,172,255,.09);
-      background:linear-gradient(90deg,rgba(111,72,255,.055),transparent 36%,rgba(72,202,255,.035));
+      background:rgba(10,12,19,.62);
     }
     .feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
     .card{
       position:relative;overflow:hidden;
-      border:1px solid var(--line);border-radius:14px;
-      background:linear-gradient(145deg,rgba(27,18,51,.86),rgba(10,7,23,.94));
-      box-shadow:inset 0 1px rgba(255,255,255,.025);
-      transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease;
+      border:1px solid var(--line);border-radius:5px;
+      background:rgba(13,16,24,.94);box-shadow:none;
+      transition:border-color .18s ease,background .18s ease;
     }
-    .card::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 90% 0,rgba(121,91,255,.14),transparent 38%);pointer-events:none}
-    .card:hover{border-color:rgba(203,169,255,.40);transform:translateY(-3px);box-shadow:0 18px 42px rgba(0,0,0,.24),0 0 32px rgba(136,76,255,.10)}
-    .feature{padding:23px;display:grid;grid-template-columns:42px 1fr;gap:14px;min-height:154px}
+    .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:rgba(167,120,255,.45);pointer-events:none}
+    .card:hover{border-color:rgba(167,120,255,.48);background:#111520}
+    .feature{padding:21px;display:grid;grid-template-columns:38px 1fr;gap:14px;min-height:148px}
     .icon{
-      width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
-      color:var(--teal-2);border:1px solid rgba(183,125,255,.30);background:rgba(168,85,247,.10)
+      width:38px;height:38px;border-radius:3px;display:grid;place-items:center;
+      color:var(--teal-2);border:1px solid rgba(167,120,255,.30);background:#141022
     }
-    .icon svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8}
-    .feature h3{margin:0 0 7px;color:#e2c6ff;font-size:17px}
-    .feature p{margin:0;color:#c0b5cf;font-size:14px;line-height:1.58}
+    .icon svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7}
+    .feature h3{margin:0 0 7px;color:#d8c8f2;font:700 15px/1.35 var(--mono)}
+    .feature p{margin:0;color:#9fa8ba;font-size:13px;line-height:1.58}
 
     /* examples */
     #examples{padding-top:56px;padding-bottom:70px}
     .examples-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-    .example-card{padding:21px;min-width:0;display:flex;flex-direction:column}
-    .docker-example{grid-column:1 / -1}
-    .docker-example .mini-terminal{min-height:0}
-    .example-label{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;margin:0 0 16px}
+    .example-card{padding:19px;min-width:0;display:flex;flex-direction:column}
+    .example-label{display:flex;align-items:center;gap:10px;font:700 14px/1.35 var(--mono);margin:0 0 7px;color:#dbe0eb}
+    .example-when{margin:0 0 13px;color:#8992a4;font-size:12px;line-height:1.5}
     .badge{
-      flex:0 0 auto;width:23px;height:23px;border-radius:50%;
-      display:grid;place-items:center;background:linear-gradient(135deg,#e2bdff,#9a56f3);color:#160821;font:800 11px/1 var(--mono)
+      flex:0 0 auto;width:24px;height:22px;border-radius:2px;
+      display:grid;place-items:center;background:#191127;border:1px solid rgba(167,120,255,.45);color:var(--teal-2);font:800 10px/1 var(--mono)
     }
     .mini-terminal{
-      border:1px solid rgba(183,235,223,.17);border-radius:10px;
-      flex:1;background:rgba(6,4,14,.84);padding:16px;min-height:276px;overflow:hidden;
+      border:1px solid rgba(137,151,182,.18);border-radius:3px;
+      flex:1;background:#07090e;padding:15px;min-height:276px;overflow:hidden;
       font:11px/1.52 var(--mono);color:#cfc4dc;
     }
 
@@ -262,19 +257,18 @@
 
     /* footer */
     footer{
-      border-top:1px solid var(--line);padding:42px 0 36px;margin-top:0;
-      background:linear-gradient(180deg,rgba(14,9,29,.28),rgba(7,5,16,.68));
+      border-top:1px solid var(--line);padding:38px 0 34px;margin-top:0;background:#07090e;
     }
     .footer-grid{display:grid;grid-template-columns:1.15fr .7fr 1.15fr;gap:44px;align-items:start}
-    .footer-heading{margin:2px 0 14px;color:#d8c9ea;font:800 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase}
+    .footer-heading{margin:2px 0 14px;color:#b9a6d8;font:800 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase}
     .footer-links{display:grid;gap:10px;color:#b6abc6;font-size:13px}
     .footer-links a:hover,.footer-resources a:hover{color:var(--teal-2)}
     .footer-note{font-size:12px;color:#958aa8;margin-top:11px}
     .footer-resources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 14px}
     .footer-resources a{color:#bba6d8;font:11px/1.35 var(--mono)}
-    .ascii{font:9px/1.08 var(--mono);color:rgba(184,118,255,.35);white-space:pre;margin-top:18px}
+    .ascii{font:9px/1.08 var(--mono);color:rgba(167,120,255,.35);white-space:pre;margin-top:18px}
 
-    @media (prefers-reduced-motion:reduce){.btn,.card{transition:none}.card:hover,.btn:hover{transform:none}}
+    @media (prefers-reduced-motion:reduce){.btn,.card{transition:none}}
 
     /* responsive */
     @media (max-width:980px){
@@ -292,24 +286,23 @@
       .hero-copy p{font-size:16px}
       .terminal-body{min-height:0;font-size:11px;padding:20px}
       .examples-grid{grid-template-columns:1fr}
-      .docker-example{grid-column:auto}
       #examples{padding:48px 0}
       .footer-grid{grid-template-columns:1fr;gap:28px}
       .footer-resources{max-width:390px}
     }
     @media (max-width:650px){
       .wrap{width:min(100% - 32px,1240px)}
-      .nav-inner{height:62px;gap:12px}
+      .nav-inner{height:56px;gap:12px}
       .small-link{display:none}
       .btn{padding:10px 13px}
-      .brand{font-size:24px}
+      .brand{font-size:22px}
       h1{font-size:52px}
       section{padding:44px 0}
       #examples{padding:44px 0}
       .hero{padding:42px 0 34px}
       .hero-grid{gap:32px}
       .hero-install-row{flex-direction:column;gap:12px}
-      .hero-install-wrap{width:100%}
+      .hero-install-wrap{width:100%;flex:0 0 auto}
       .hero-install{gap:8px}
       .terminal-body{font-size:11px;padding:20px;min-height:0}
       .comparison{padding-top:4px}
@@ -371,7 +364,7 @@
           <div class="terminal" aria-label="Example logc terminal output">
             <div class="terminal-head">
               <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-              <span class="terminal-title">terminal</span>
+              <span class="terminal-title">logc://local/session</span>
             </div>
             <div class="terminal-body">
 <pre><span class="prompt">$</span> <span class="cmd">logc</span>
@@ -406,7 +399,7 @@
         <div class="comparison-heading">
           <div class="eyebrow">A clearer incident workflow</div>
           <h2 class="section-title" id="comparison-title">From shell fragments to <span>one focused command.</span></h2>
-          <p class="section-intro">Start with the service and symptom you know. logc handles discovery, history, and live follow-up in a single workflow.</p>
+          <p class="section-intro">Start with the service and symptom you know. logc handles discovery, recent-log search, and live follow-up in a single workflow.</p>
         </div>
         <div class="beforeafter">
           <div class="ba-grid">
@@ -443,7 +436,7 @@ $ tail -f app.log | grep ERROR</pre>
           </article>
           <article class="card feature">
             <div class="icon"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></div>
-            <div><h3>Search built in</h3><p>Regex search without shelling out to grep or zgrep.</p></div>
+            <div><h3>Latest logs first</h3><p>Search the recent 24-hour window by default, choose a precise <span class="mono">--since</span> window, or explicitly request <span class="mono">--all</span>.</p></div>
           </article>
           <article class="card feature">
             <div class="icon"><svg viewBox="0 0 24 24"><path d="M2 13h4l2-7 4 13 3-9 2 3h5"/></svg></div>
@@ -451,7 +444,7 @@ $ tail -f app.log | grep ERROR</pre>
           </article>
           <article class="card feature">
             <div class="icon"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="5" rx="1"/><rect x="4" y="10" width="16" height="5" rx="1"/><rect x="4" y="17" width="16" height="4" rx="1"/><path d="M7 5.5h.01M7 12.5h.01M7 19h.01"/></svg></div>
-            <div><h3>System aware</h3><p>Works with files, journald, and common Linux log sources.</p></div>
+            <div><h3>System aware</h3><p>Works with files, journald, and common Linux log sources. Full system history uses journald on Linux.</p></div>
           </article>
           <article class="card feature">
             <div class="icon"><svg viewBox="0 0 24 24"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg></div>
@@ -468,11 +461,12 @@ $ tail -f app.log | grep ERROR</pre>
     <section id="examples">
       <div class="wrap">
         <h2 class="section-title">How <span>logc</span> works</h2>
-        <p class="section-intro">You remember the problem. logc finds the source, searches the history, and follows what matters.</p>
+        <p class="section-intro">Start with the clue you have—host, service, symptom, process, port, unit, or container. logc turns it into a focused log workflow.</p>
 
         <div class="examples-grid">
           <article class="card example-card">
             <div class="example-label"><span class="badge">1</span>See active app logs</div>
+            <p class="example-when">Use when you have just opened an unfamiliar host and need an immediate overview.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc
 
@@ -493,7 +487,8 @@ $ tail -f app.log | grep ERROR</pre>
           </article>
 
           <article class="card example-card">
-            <div class="example-label"><span class="badge">2</span>Search a service</div>
+            <div class="example-label"><span class="badge">2</span>Search recent—or all—service logs</div>
+            <p class="example-when">Use when you know the service and symptom, but not which active or rotated file contains it.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc payment ERROR
 
@@ -506,12 +501,20 @@ request_id=9d2b1 code=42
 after 30s
 request_id=9c8a0
 
-<span class="dim">2 files · 2 matches</span></pre>
+<span class="dim">2 files · 2 matches · recent 24h</span>
+
+<span class="prompt">$</span> logc payment ERROR --all
+
+<span class="path">/srv/payment/log/app.log.7.gz</span>
+2026-07-14 09:31:22 <span class="err">ERROR</span> settlement rejected
+
+<span class="dim">active + rotated + .gz · all available history</span></pre>
             </div>
           </article>
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">3</span>Jump from port to logs</div>
+            <p class="example-when">Use when an unhealthy endpoint is known only by its listening port.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc :8080
 
@@ -530,6 +533,7 @@ request_id=9c8a0
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">4</span>Find process logs</div>
+            <p class="example-when">Use when you know the Linux process name or PID, but not its log path.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc @nginx
 
@@ -543,6 +547,7 @@ request_id=9c8a0
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">5</span>Search history, then follow</div>
+            <p class="example-when">Use when an incident began recently and you want historical context plus new matching events.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc api 'timeout|reset' --since 30m -f
 
@@ -560,6 +565,7 @@ request_id=9c8a0
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">6</span>Stream system logs</div>
+            <p class="example-when">Use when the failure may involve systemd, the kernel, networking, or another host-level service.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc system
 
@@ -568,13 +574,14 @@ request_id=9c8a0
 2026-08-08 14:22:31 host kernel: eth0 link is up
 2026-08-08 14:22:38 host systemd[1]: backup.service completed
 
-<span class="dim">streaming operating-system logs</span>
+<span class="dim">streaming operating-system logs · --all requires Linux journald</span>
 <span class="ok">-- following -- (press Ctrl+C to stop)</span></pre>
             </div>
           </article>
 
-          <article class="card example-card docker-example">
+          <article class="card example-card">
             <div class="example-label"><span class="badge">7</span>Follow a Docker container</div>
+            <p class="example-when">Use when the workload runs in Docker and you want native Docker options with logc filtering.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc docker api
 
@@ -584,6 +591,23 @@ request_id=9c8a0
 2026-08-08T14:31:24.112Z <span class="info">INFO</span> retrying request_id=req-8f1aa attempt=1
 
 <span class="ok">-- following Docker logs -- (press Ctrl+C to stop)</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">8</span>Watch an error storm</div>
+            <p class="example-when">Use when repeated errors scroll too quickly and you need rate, count, and timing instead of raw lines.</p>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> logc watch ERROR api --since 30m
+
+logc watch "ERROR"  [13:50:03]
+2 alert groups · 7 events/min · 3 sources
+
+COUNT  FIRST     LAST      SOURCE              ALERT
+12     13:42:02  13:49:11  app/api/app.log     <span class="err">ERROR</span> upstream timeout
+4      13:45:18  13:49:44  app/worker/work…    <span class="err">ERROR</span> queue reset
+
+<span class="dim">Refreshes every second · Press Ctrl+C to stop</span></pre>
             </div>
           </article>
         </div>

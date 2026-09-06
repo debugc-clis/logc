@@ -425,6 +425,10 @@ func watchCommand(args []string) int {
 		fmt.Fprintln(os.Stderr, "logc watch: --json is not supported; use the terminal dashboard")
 		return 2
 	}
+	if opts.All {
+		fmt.Fprintln(os.Stderr, "logc watch: --all is not supported; use an explicit --since window")
+		return 2
+	}
 	resolved, pattern, err := resolveWatchArgs(cfg, opts.Positionals, opts.Match)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "logc watch:", err)
@@ -462,7 +466,7 @@ func watchCommand(args []string) int {
 	}
 	var bootstrapPaths []string
 	if !since.IsZero() {
-		historical, _, historyErr := resolveWatchArgsWithHistory(cfg, opts.Positionals, opts.Match, true)
+		historical, _, historyErr := resolveWatchArgsWithHistory(cfg, opts.Positionals, opts.Match, true, since)
 		if historyErr != nil {
 			fmt.Fprintln(os.Stderr, "logc watch:", historyErr)
 			return 2
@@ -478,12 +482,12 @@ func watchCommand(args []string) int {
 }
 
 func resolveWatchArgs(cfg Config, positionals []string, explicitMatch string) (ResolvedTarget, string, error) {
-	return resolveWatchArgsWithHistory(cfg, positionals, explicitMatch, false)
+	return resolveWatchArgsWithHistory(cfg, positionals, explicitMatch, false, time.Time{})
 }
 
-func resolveWatchArgsWithHistory(cfg Config, positionals []string, explicitMatch string, includeHistory bool) (ResolvedTarget, string, error) {
+func resolveWatchArgsWithHistory(cfg Config, positionals []string, explicitMatch string, includeHistory bool, cutoff time.Time) (ResolvedTarget, string, error) {
 	if explicitMatch != "" {
-		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals, includeHistory)
+		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals, includeHistory, cutoff)
 		return resolved, explicitMatch, err
 	}
 	if len(positionals) == 0 {
@@ -493,13 +497,13 @@ func resolveWatchArgsWithHistory(cfg Config, positionals []string, explicitMatch
 	// Keep the original TARGET REGEX form working for existing users. The new
 	// preferred form puts the regex first so it can accept any number of targets.
 	if len(positionals) == 2 && !looksLikeSearchExpression(positionals[0]) && looksLikeSearchExpression(positionals[1]) {
-		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[:1], includeHistory)
+		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[:1], includeHistory, cutoff)
 		if err == nil {
 			return resolved, positionals[1], nil
 		}
 	}
 
-	resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[1:], includeHistory)
+	resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[1:], includeHistory, cutoff)
 	if err != nil {
 		return ResolvedTarget{}, "", err
 	}
@@ -507,13 +511,13 @@ func resolveWatchArgsWithHistory(cfg Config, positionals []string, explicitMatch
 }
 
 func resolveWatchTargets(cfg Config, rawTargets []string) (ResolvedTarget, error) {
-	return resolveWatchTargetsWithHistory(cfg, rawTargets, false)
+	return resolveWatchTargetsWithHistory(cfg, rawTargets, false, time.Time{})
 }
 
-func resolveWatchTargetsWithHistory(cfg Config, rawTargets []string, includeHistory bool) (ResolvedTarget, error) {
+func resolveWatchTargetsWithHistory(cfg Config, rawTargets []string, includeHistory bool, cutoff time.Time) (ResolvedTarget, error) {
 	targets := splitWatchTargets(rawTargets)
 	if len(targets) == 0 {
-		return resolveTarget(cfg, "", includeHistory)
+		return resolveDefaultTarget(cfg, includeHistory, cutoff)
 	}
 	resolved, consumed, err := resolveLeadingTargets(cfg, targets, includeHistory)
 	if err != nil {

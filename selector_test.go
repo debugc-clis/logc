@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestNaturalSearchInterpretation(t *testing.T) {
@@ -49,6 +51,113 @@ func TestGroupHistoryExpandsRotatedSiblings(t *testing.T) {
 	}
 	if len(r.Paths) != 3 {
 		t.Fatalf("history paths=%#v", r.Paths)
+	}
+}
+
+func TestExplicitMatchIncludesDefaultHistory(t *testing.T) {
+	directory := t.TempDir()
+	for _, name := range []string{"app.log", "app.log.1", "app.log.2.gz"} {
+		if err := os.WriteFile(filepath.Join(directory, name), []byte("ERROR event\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	config := defaultConfig()
+	config.DefaultLogDirs = []string{directory}
+	config.Excludes = nil
+	resolved, query, err := interpretPositionals(config, nil, "ERROR", true, timeZero)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query != "ERROR" || len(resolved.Paths) != 3 {
+		t.Fatalf("query=%q paths=%#v", query, resolved.Paths)
+	}
+}
+
+func TestDefaultRecentHistoryFiltersBeforeFairLimit(t *testing.T) {
+	root := t.TempDir()
+	hotDirectory := filepath.Join(root, "hot")
+	if err := os.MkdirAll(hotDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	hotPaths := []string{
+		filepath.Join(hotDirectory, "app.log"),
+		filepath.Join(hotDirectory, "app.log.1"),
+	}
+	for index, path := range hotPaths {
+		if err := os.WriteFile(path, []byte("ERROR recent\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		modified := now.Add(-time.Duration(index) * time.Hour)
+		if err := os.Chtimes(path, modified, modified); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for index := 0; index < 4; index++ {
+		directory := filepath.Join(root, fmt.Sprintf("old-%d", index))
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(directory, "app.log")
+		if err := os.WriteFile(path, []byte("ERROR old\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		old := now.Add(-48 * time.Hour)
+		if err := os.Chtimes(path, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	config := defaultConfig()
+	config.DefaultLogDirs = []string{root}
+	config.Excludes = nil
+	config.MaxFiles = 1
+	resolved, err := resolveDefaultTarget(config, true, now.Add(-24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolved.Paths) != len(hotPaths) {
+		t.Fatalf("paths=%#v", resolved.Paths)
+	}
+	for _, path := range hotPaths {
+		if !containsString(resolved.Paths, path) {
+			t.Fatalf("recent history missing %q: %#v", path, resolved.Paths)
+		}
+	}
+	allHistory, err := resolveDefaultTarget(config, true, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(allHistory.Paths) != 6 {
+		t.Fatalf("all history was limited: %#v", allHistory.Paths)
+	}
+}
+
+func TestDefaultRecentHistoryWarnsWhenCandidateLimitApplies(t *testing.T) {
+	root := t.TempDir()
+	now := time.Now()
+	for index := 0; index < 6; index++ {
+		directory := filepath.Join(root, fmt.Sprintf("service-%d", index))
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(directory, "app.log")
+		if err := os.WriteFile(path, []byte("ERROR recent\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(path, now, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	config := defaultConfig()
+	config.DefaultLogDirs = []string{root}
+	config.Excludes = nil
+	config.MaxFiles = 1
+	resolved, err := resolveDefaultTarget(config, true, now.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolved.Paths) != 5 || len(resolved.Warnings) != 1 {
+		t.Fatalf("paths=%#v warnings=%#v", resolved.Paths, resolved.Warnings)
 	}
 }
 

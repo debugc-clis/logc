@@ -52,6 +52,16 @@ func TestParseCLIRecognizesSourceFiltersAndFullRows(t *testing.T) {
 	}
 }
 
+func TestParseCLIRecognizesAllHistory(t *testing.T) {
+	options, err := parseCLI([]string{"--all", "ERROR"}, defaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !options.All {
+		t.Fatalf("options=%#v", options)
+	}
+}
+
 func TestFormatAge(t *testing.T) {
 	now := time.Now()
 	for _, test := range []struct {

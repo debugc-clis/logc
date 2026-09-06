@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add incident-oriented command guidance, practical troubleshooting playbooks, and matching landing-page scenarios.
+- Prioritize newest files and the configured recent window for ordinary searches, with explicit `--all` for complete available history.
 - Stream complete regular and gzip logs during search instead of silently limiting results to 16 MiB.
 - Bootstrap `watch --since` from complete matching history and use event timestamps for FIRST, LAST, and event-rate calculations.
 - Discover new default log files while following, support file symlinks and explicit extensionless files, and select files fairly across source directories.
