@@ -1,11 +1,10 @@
 # logc
 
-
 > One command to find, search, follow, and watch local logs.
 
-`logc` replaces the usual `find`, `grep`, `zgrep`, and `tail` chain with a focused local troubleshooting workflow. Start with the logs available on the machine, narrow to the signal you need, and keep watching as new events arrive.
+`logc` is a read-only Linux command-line tool for operators who still want to inspect logs themselves, but do not want to repeatedly assemble `find`, `grep`, `zgrep`, `journalctl`, and `tail -F` pipelines.
 
-<img src="assets/logc-demo.jpg" alt="logc displays recent application logs from payment API, worker, and nginx files" width="480" />
+<img src="./assets/logc-demo.jpg" alt="logc searching and following several log sources in one terminal" width="560">
 
 ```bash
 logc api 'timeout|reset' --since 30m -f
@@ -13,283 +12,277 @@ logc api 'timeout|reset' --since 30m -f
 
 | Before | After |
 | --- | --- |
-| `find` + `grep` + `zgrep` + `tail` | `logc` |
-| Remember paths, rotated files, and shell pipelines. | Name the service and follow the signal. |
+| `find + grep + zgrep + tail -F + journalctl` | `logc` |
 
-**[Download a release](https://github.com/debugc-clis/logc/releases)** · **[Get started](#quick-start)** · **[Configuration](#configuration)** · **[Contribute](#contributing)**
+[View the landing page](https://www.logc.us/) · [Browse the source](https://github.com/debugc-clis/logc) · [Report an issue](https://github.com/debugc-clis/logc/issues)
+
+> [!IMPORTANT]
+> Homebrew packaging is **still being worked on**. `brew install logc` is not available yet; use the source installation below.
 
 ## Why logc
 
-`logc` is a dependency-free Go CLI for local log triage. It brings application-log discovery, regular-expression search, history, and fair multi-file follow into one interface. It focuses on local logs and SRE ergonomics: it does not send logs to a remote service or perform AI analysis.
+During an incident, the first problem is often not understanding the error—it is finding the right log source quickly.
 
-- **Discover** recent application logs without memorizing paths.
-- **Classify** sources as application, system, database, web, network, container, or custom logs without interpreting their meaning.
-- **Search** complete active, rotated, and gzip-compressed logs without switching between `grep` and `zgrep`.
-- **Follow** multiple files fairly, even when one source is noisy.
-- **Watch** matching events as a live alert summary with rates and duplicate counts.
-- **Resolve** services by configured name, file path, directory, glob, Linux process/PID, or listening port.
-- **Separate** application logs from common operating-system logs.
+`logc` focuses on local log aggregation and operator-driven debugging:
 
-## Quick Start
+- discovers recent application logs across common Linux paths;
+- follows several files as one live stream, including newly created and rotated files;
+- searches current, rotated, and gzip-compressed logs;
+- resolves services by name, PID, or listening port;
+- groups sources by application, module, system, network, database, or custom configuration;
+- highlights `FATAL`, `ERROR`, `WARN`, `INFO`, and `DEBUG` in terminals;
+- exposes systemd and Docker logs without replacing their native tools;
+- provides a live error-rate and repeated-error view with `logc watch`.
 
-```bash
-# Discover and follow recent application logs.
-logc
-
-# Follow a named source from ~/.logc.conf.
-logc api
-
-# Search a source, then follow new matching lines.
-logc api 'timeout|reset' --since 30m -f
-```
-
-`logc` searches `/var/log`, `/opt/var/log`, and `/opt/log` by default. It considers files modified in the last 24 hours, selects up to 20 files fairly across source directories, shows 10 initial lines per file, then follows those files and discovers newly created logs. File symlinks are supported, including Kubernetes-style container log links. It applies configured `ignore_line` filters throughout.
+It intentionally stays local and transparent. It does not upload logs, run AI analysis, or replace a centralized observability platform.
 
 ## Install
 
-Requires Go 1.22+.
+### Build from source — available now
+
+Requires Go 1.22 or newer.
 
 ```bash
 git clone https://github.com/debugc-clis/logc.git
 cd logc
 make build
-sudo install -m 755 bin/logc /usr/local/bin/logc
+sudo install -m 0755 ./logc /usr/local/bin/logc
 logc version
 ```
 
-For a user-local install managed by Go instead, run:
+For a user-local installation:
+
+```bash
+mkdir -p ~/.local/bin
+install -m 0755 ./logc ~/.local/bin/logc
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+You can also install from the checked-out source with:
 
 ```bash
 go install .
 ```
 
-Pushing a `v*` tag publishes Linux and macOS archives with SHA-256 checksums to GitHub Releases.
-
-## Common Workflows
-
-Start with what you know. You do not need to know the exact log path before using logc.
-
-| Incident situation | Start with | What logc does |
-| --- | --- | --- |
-| You just opened an unfamiliar host | `logc` | Finds recent application logs, shows their latest lines, and keeps following them. |
-| You know the service name | `logc api` | Resolves the configured or discovered source and follows its active files. |
-| A symptom started recently | `logc api 'timeout\|reset' --since 30m` | Searches active, rotated, and `.gz` logs within the requested window. |
-| You need search results and new events | `logc api ERROR --since 30m -f` | Searches existing history first, then follows new matching lines. |
-| Errors are repeating too quickly to read | `logc watch ERROR api --since 30m` | Groups repeated errors and shows counts, rate, and first/last occurrence. |
-| You only know a process, PID, or port | `logc @nginx`, `logc @12345`, or `logc :8080` | Resolves the process to its open log files on Linux. |
-| The workload runs in Docker | `logc docker api` | Follows the container like `docker logs api -f`, with optional logc filtering. |
-| The problem may be at host level | `logc system ERROR --since 30m` | Searches and follows journald/system log output. |
-| Recent logs are not enough | `logc api ERROR --all` | Explicitly scans all available history for the resolved source. |
-
-### Find the right source
+### Homebrew — working on it
 
 ```bash
-logc ls                    # List discovered and configured sources.
-logc ls --category web     # List web/proxy log sources.
-logc where api             # Show the files matched by a source.
-logc /srv/api/log          # Follow all supported logs in a directory.
-logc '/srv/**/logs/*.log'  # Follow a recursive glob and discover new files.
+# Not available yet
+brew install logc
 ```
 
-`logc ls` shows a stable source ID, category, module, type, file count, latest activity age, logrotate status, and location. `ROTATE=yes` means every discovered file in that source is managed by logrotate; `partial` means only some files are managed. Auto-discovered source IDs such as `web/nginx` can be passed back to `logc` directly.
+The Homebrew formula and tap are on the roadmap. Do not use this command as the current installation method.
 
-On Linux, logc reads `/etc/logrotate.conf` and included files such as `/etc/logrotate.d/nginx`. Managed files are marked as `logrotate` in normal log block headers, as `[logrotate]` in `logc where`, and as `[R]` in the compact `logc watch` source column. Historical `.log.1` and `.log.1.gz` files are associated with the matching active logrotate path when possible. The inspection is read-only; logc never changes rotation policy or runs logrotate.
+## Quick Start
 
-Configure memorable names when paths are inconvenient:
+```bash
+# Discover recent logs, print their latest lines, then keep following
+logc
 
-```ini
-group.api=/srv/api/log/*.log
+# Follow sources matching a service, path, PID, or port
+logc api
+logc /opt/log/payment
+logc 1234
+logc :8080
 
-[group.payment]
-category=app
-module=payment
-path=/srv/payment/**/*.log
+# Search recent API logs
+logc api ERROR --since 30m
+
+# Search first, then continue following matching sources
+logc api 'timeout|reset' --since 30m -f
+
+# Watch live error rate and repeated messages
+logc watch ERROR
 ```
 
-### Search without pipelines
+Plain `logc` is a follow command: it prints the latest 10 lines from up to 20 recently modified files, then refreshes as those files receive new content. It also rescans periodically so newly created matching log files can join the stream.
+
+Stop any follow or watch command with `Ctrl+C`.
+
+## Choose a Command
+
+| Goal | Command |
+| --- | --- |
+| See what is happening on the machine now | `logc` |
+| Follow one application or module | `logc api` |
+| Search recent matching logs | `logc api ERROR --since 30m` |
+| Search and continue following | `logc api 'timeout|reset' --since 30m -f` |
+| Inspect a process by PID | `logc 1234` |
+| Inspect the process listening on a port | `logc :8080` |
+| Watch repeated failures and error rate | `logc watch ERROR` |
+| Stream systemd journal entries | `logc system api -f` |
+| Follow a Docker container | `logc docker --tail 100 -f api` |
+| List discovered log sources | `logc ls` |
+| Explain why a target matched | `logc where api` |
+
+## Command Guide
+
+### 1. Aggregate and follow local logs
+
+```bash
+logc
+```
+
+The default command:
+
+1. scans configured roots such as `/var/log`, `/opt/var/log`, and `/opt/log`;
+2. skips known system-log paths that are better handled by `logc system`;
+3. selects recently modified application logs;
+4. prints a small tail from each source;
+5. keeps following updates like a multi-file `tail -F`;
+6. detects truncation, replacement, and common logrotate activity;
+7. periodically discovers newly created matching files.
+
+Target a service, path, process, or port to narrow the stream:
+
+```bash
+logc payment
+logc /srv/payment/log
+logc 1234
+logc :8080
+```
+
+### 2. Search recent logs
+
+The second positional argument is a Go regular expression:
 
 ```bash
 logc api ERROR
 logc api 'timeout|connection reset'
-logc ERROR                         # Search default application logs.
-logc api error -i -C 3 --since 2h
-logc api ERROR --all               # Explicitly search all available history.
+logc nginx ' 5[0-9][0-9] '
+```
+
+Searches include active logs, rotated files such as `.1`, and gzip files such as `.2.gz`. By default, candidates are limited to recently modified files.
+
+```bash
+logc api ERROR --since 30m
+logc api ERROR --since 2026-08-08T13:00:00
+logc api ERROR --all
+```
+
+Useful output controls:
+
+```bash
+logc api ERROR -C 2
 logc api ERROR --dedup
-logc api ERROR --current            # Skip rotated and .gz history.
-logc api ERROR --json | jq           # One JSON object per source block.
-logc --category app,web ERROR         # Search selected source categories.
-logc --module payment ERROR           # Search a configured module.
+logc api ERROR --category app --module api
+logc api ERROR --json
 ```
 
-The expression is a Go-compatible regular expression. By default, searches prioritize the newest files and use the configured `recent` window (`24h` by default), because incident response usually starts with the latest events. Use `--since 30m`, `--since 7d`, or `--since today` for an explicit window; use `--all` with a search expression only when complete available history is required. Matching active, rotated, and `.gz` logs are scanned completely within that scope, while `--current` skips rotated and compressed files. For system logs, `--all` requires journald on Linux. `ERROR`, `errors`, `WARN`, and `warnings` are severity shortcuts.
+### 3. Search, then follow
 
-### Resolve a running service (Linux)
+Add `-f` to search historical candidates first and then follow active files:
 
 ```bash
-logc @nginx   # Process name; falls back to a systemd unit when appropriate.
-logc @12345   # PID.
-logc :8080    # Listening port → PID → open log files.
+logc api 'timeout|reset' --since 30m -f
 ```
 
-`logc` inspects `/proc/<pid>/fd` for process-owned log files. Port lookup uses `lsof`, with `ss` as a Linux fallback.
+This is useful when you need immediate context before waiting for the next occurrence.
 
-### Stream system logs
-
-```bash
-logc system
-logc system --kernel
-logc system ERROR --since 30m
-logc @api.service ERROR -f
-```
-
-On Linux, `logc` uses `journalctl` when available and falls back to `dmesg`; macOS uses `log stream`. System streams use the same regex, context, deduplication, color, noise-filter, and JSON rendering pipeline as file logs.
-
-### Follow Docker container logs
-
-`logc docker` forwards Docker log options directly to `docker logs` and follows by default.
-
-```bash
-logc docker api
-logc docker --tail 100 api
-logc docker --since 30m --timestamps api
-logc docker -f api
-logc docker --since 30m -m ERROR -C 2 api
-logc docker --json api
-```
-
-Use Docker's native flags exactly as you would with `docker logs`; place options before the container name. `-m/--match`, `-i`, `-C`, `--dedup`, `--no-color`, and `--json` are handled by logc while all other options are forwarded to Docker. Docker must be installed and accessible in `PATH`.
-
-### Watch live alerts
-
-`logc watch` aggregates matching events instead of printing every line. It normalizes timestamps and common request/trace identifiers so repeated failures are counted together, then refreshes once per second with the event rate from the last minute and first/last occurrence time.
+### 4. Watch live alerts
 
 ```bash
 logc watch ERROR
-logc watch api 'timeout|reset'
-logc watch api ERROR --since 30m
-logc watch ERROR /var/log/nginx '/opt/log/**/*.log' /etc/myapp/app.log
-logc watch 'timeout|reset' '/opt/var/*log,/etc/log.log'
-logc watch ERROR @api.service --since 30m
-logc watch ERROR --category app --module payment
-logc watch ERROR --full
+logc watch 'timeout|connection reset' api
+logc watch ERROR '/opt/log/*.log,/etc/service.log'
 ```
 
-Use `logc watch REGEX [TARGET...]` to watch one or more named sources, directories, files, quoted glob patterns, or a systemd unit. Comma-separated targets are also supported. `logc watch api 'timeout|reset'` remains available for compatibility. With `--since`, logc scans the complete matching history first, then follows active files without counting historical events as current traffic. `watch` intentionally requires a bounded window and does not accept `--all`. FIRST/LAST use event timestamps when available; `~` marks a file or observation-time estimate for lines without timestamps. Long rows are truncated to terminal width unless `--full` is set.
+The watch view reports:
 
-## Incident Playbooks
+- current error rate;
+- total and repeated-event counts;
+- first and last occurrence times;
+- grouped normalized messages;
+- source category, module, and logrotate status.
 
-### 1. Triage an unfamiliar machine
-
-Start broad, identify the active source, and then narrow the stream:
+Path arguments may be files, directories, glob patterns, or comma-separated selectors. The dashboard refreshes every second and calculates its live rate over a one-minute window.
 
 ```bash
-logc                    # Aggregate and follow the latest discovered app logs.
-logc ls                 # Show stable source IDs and their latest activity.
-logc where web/nginx    # Confirm exactly which files a source resolves to.
-logc web/nginx          # Follow only that source.
+logc watch ERROR --since 30m
+logc watch ERROR api --full
+logc watch ERROR --category app --module api
 ```
 
-Plain `logc` is the fastest first command after SSHing into a host. It shows the latest configured number of lines from each selected file, then continues following appended data and discovers newly created log files.
+`logc watch` is a terminal dashboard and intentionally does not support `--json` or `--all`.
 
-### 2. Investigate a recent API timeout
-
-Search a bounded window first so old incidents do not bury the current signal:
+### 5. Stream system logs
 
 ```bash
-logc api 'timeout|connection reset' --since 30m -C 2
+logc system
+logc system api
+logc system api --since 30m -f
+logc system api -n 200
 ```
 
-This searches the active file plus matching rotated and gzip-compressed history, prints two context lines around each match, and exits. Once the pattern looks useful, add `-f` to continue watching only new matching lines:
+On systemd machines, `logc system` uses `journalctl`. Distribution-specific file paths remain configurable for systems that use traditional log files.
+
+### 6. Follow Docker containers
 
 ```bash
-logc api 'timeout|connection reset' --since 30m -C 2 -f
+logc docker api
+logc docker --tail 100 -f api
+logc docker --since 30m --timestamps api
+logc docker --details api
 ```
 
-Use `--all` only when the bounded search is insufficient:
+`logc docker CONTAINER [docker logs options]` preserves Docker's logging behavior while keeping the command under the same `logc` workflow. The container name or ID is passed directly to `docker logs`.
+
+### 7. Inspect discovered sources
 
 ```bash
-logc api 'timeout|connection reset' --all
+logc ls
+logc ls --json
+logc where api
+logc where :8080 --json
 ```
 
-### 3. Measure a repeating error storm
+- `logc ls` lists discoverable sources with category, module, recency, and logrotate metadata.
+- `logc where TARGET` explains matched paths and source resolution without following them.
 
-Use `watch` when raw output scrolls too quickly to understand frequency:
+## Common Options
 
-```bash
-logc watch ERROR api --since 30m
-```
+| Option | Purpose |
+| --- | --- |
+| `-f`, `--follow` | Continue following after the initial output |
+| `-n N`, `--lines N` | Set initial lines per file |
+| `--since VALUE` | Limit search by duration or timestamp |
+| `--all` | Disable the recent-file search cutoff |
+| `-C N`, `--context N` | Show context lines around matches |
+| `--dedup` | Collapse repeated search results |
+| `--category NAME` | Filter by source category |
+| `--module NAME` | Filter by module |
+| `-i`, `--ignore-case` | Match without case sensitivity |
+| `--current` | Skip rotated and gzip history |
+| `--json` | Emit machine-readable output where supported |
+| `--no-color` | Disable terminal colors |
+| `--full` | Do not truncate long rows in `logc watch` |
+| `-m REGEX`, `--match REGEX` | Provide the match expression explicitly |
+| `--exclude PATTERN` | Add a path exclusion for this run |
 
-Approximate output:
-
-```text
-logc watch "ERROR"  [13:50:03]
-2 alert groups · 7 events/min · 3 sources
-
-COUNT  FIRST     LAST      SOURCE                 ALERT
-12     13:42:02  13:49:11  app/api/app.log        ERROR upstream timeout after 30s
-4      13:45:18  13:49:44  app/worker/worker.log  ERROR queue connection reset
-
-Refreshes every second · Press Ctrl+C to stop
-```
-
-Changing request IDs and common trace identifiers are normalized before grouping, so repeated copies of the same failure increase `COUNT` instead of creating a new row every time.
-
-### 4. Correlate application and platform failures
-
-Use separate terminals when an application error may be caused by its container, service manager, or host:
-
-```bash
-# Terminal 1: application files
-logc api ERROR --since 30m -f
-
-# Terminal 2: systemd unit
-logc @api.service ERROR -f
-
-# Or, for a containerized service
-logc docker --since 30m --timestamps -m 'ERROR|timeout' api
-```
-
-This keeps each source readable while preserving the original timestamps needed to correlate failures. logc aggregates and highlights the evidence; the operator remains responsible for diagnosis.
+Run `logc --help` or `logc COMMAND --help` for the authoritative option list.
 
 ## Configuration
 
-The default configuration path is `~/.logc.conf`. Set `LOGC_CONFIG=/path/to/logc.conf` to use another file.
+The user configuration file is `~/.logc.conf`.
+
+Create a starter configuration:
 
 ```bash
-logc config init
-logc config path
-logc config show
+logc init-config
 ```
 
-Example configuration:
+Print the effective merged configuration:
+
+```bash
+logc show-config
+```
+
+### Minimal example
 
 ```ini
-# Roots scanned by plain `logc`.
 default_log_dir=/var/log
 default_log_dir=/opt/var/log
-default_log_dir=/srv
-
-# To use only custom roots, reset the built-in list first.
-# default_log_dir=!
-# default_log_dir=/srv/logs
-
-# Add custom exclusions. Prefix an exact built-in pattern with ! to remove it.
-exclude=/srv/**/debug*.log
-# exclude=!/var/log/syslog*
-
-# Hide recurring request noise everywhere.
-ignore_line=.*GET /health.*
-ignore_line=.*GET /metrics.*
-
-# Named sources.
-# `mysql` is built in and searches common MySQL/MariaDB file-log paths.
-# Add a custom path when your database uses a nonstandard data directory.
-group.mysql=/srv/mysql/log/*.log
-group.api=/srv/api/log/*.log
-[group.payment]
-category=app
-module=payment
-path=/srv/payment/**/*.log
+default_log_dir=/opt/log
 
 lines=10
 max_files=20
@@ -299,51 +292,123 @@ scan_interval=5s
 max_batch_lines=10
 max_buffer_lines=2000
 color=true
+
+ignore_line=.*GET /health.*
+ignore_line=.*GET /metrics.*
+
+[group.api]
+path=/srv/api/log/*.log
+path=/opt/log/api/*.log
+category=app
+module=api
 ```
 
-On Linux, logc detects the distribution from `/etc/os-release` and excludes distribution-specific system-log paths from default application-log discovery. Use `logc system` for operating-system logs, or `logc config show` to inspect the active patterns. Category and module labels classify where logs come from; logc does not infer root causes or interpret application meaning.
+Custom source sections use `[group.NAME]`; a bare section such as `[api]` is not interpreted as a source group.
 
-## Operational Limits
+### Main settings
 
-- `logc` is read-only, but access to host, container, and system logs still depends on the current user's permissions.
-- Follow mode streams completed batches directly to stdout and diagnostics to stderr; it does not retain previously printed output. Each file's pending queue is capped by both `max_buffer_lines` and an 8 MiB safety limit, so a slow terminal or pipe causes older buffered lines to be dropped with an explicit warning instead of allowing unbounded process memory growth. Terminal scrollback and redirected output files are managed by the terminal or shell, not by logc.
-- Active files stay open across normal rename-and-create log rotation so logc can drain the old file before following the replacement. Open descriptors are capped at 256; larger explicit source sets fall back to path-based polling. Descriptors are closed when a source is removed, replaced, or logc exits.
-- Files already being followed remain active when they become older than the `recent` discovery window, provided the default `max_files` budget has room. A temporarily missing path is retained for 30 seconds to bridge common rotation gaps.
-- Recursive filesystem-root scans are refused. Keep source groups and glob roots narrow; new files are rescanned every five seconds by default.
-- Follow and watch modes cap each per-file read at 4 MiB and truncate an individual or unterminated line after 2 MiB to protect the host during high-volume incidents.
-- Recent default-source searches skip files whose modification time is older than the requested window, process newer files first, and fairly select up to `max_files × 5` candidates; logc warns when that safety limit applies. Narrow the target or increase `max_files` when needed. Explicit `--all` searches are not file-limited, can take time on large histories, and can be interrupted with Ctrl+C.
-- Explicit directories containing more than 1,000 files produce a polling-load warning and use a slower poll interval.
-- Terminal control sequences in log lines and paths are removed before human-readable rendering; JSON preserves the original text through normal JSON escaping.
-- Inaccessible roots and files are reported as warnings instead of being silently treated as empty.
-- `watch` retains at most 200 distinct alert groups and renders the 20 most recent groups.
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `default_log_dir` | common Linux log roots | Directories scanned for logs |
+| `lines` | `10` | Initial lines shown per file |
+| `max_files` | `20` | Maximum files selected |
+| `recent` | `24h` | Recent-file discovery window |
+| `flush_interval` | `500ms` | Maximum wait before buffered lines are printed |
+| `scan_interval` | `5s` | Follow-mode discovery interval |
+| `max_batch_lines` | `10` | Lines emitted per source in one batch |
+| `max_buffer_lines` | `2000` | Maximum pending lines retained per source |
+| `color` | `true` | Enable terminal colors when stdout is a TTY |
+| `ignore_line` | none | Regular expressions omitted from output |
+| `exclude` | distribution defaults | Discovery exclusions |
+| `group.NAME` | none | Custom source selectors |
+
+Built-in discovery includes common application, web-server, and database locations, including MySQL and MariaDB log paths. User configuration is merged after defaults, so search roots, exclusions, line filters, and source groups can be extended or overridden.
+
+### Distribution-aware system paths
+
+`logc` recognizes commonly used debugging logs across Debian, Ubuntu, CentOS, RHEL, Fedora, Amazon Linux, Alpine, Arch, and related distributions. It keeps the most useful system sources—such as general messages, kernel, daemon, audit, and package-independent service failures—while excluding user-session, cron, and installer noise from default application discovery.
+
+Use `logc system` for system logs and override the built-in paths in `~/.logc.conf` when the machine uses a custom layout.
+
+### Logrotate awareness
+
+When a discovered file is covered by a readable logrotate configuration, `logc` marks it as rotated-managed in list, location, normal, watch, and JSON output. The follower also detects file replacement and truncation so rotation does not permanently detach the stream.
+
+Because logrotate configuration may include unreadable files or shell-expanded rules, detection is best effort and never required for reading a log.
+
+## Operational Behavior
+
+- **Read-only:** `logc` does not modify log files or services.
+- **Permissions:** it only reads paths available to the current user.
+- **Bounded discovery:** the default recent window and file limit prevent accidental full-disk scans.
+- **Safe roots:** recursive discovery refuses filesystem-root scans.
+- **Long-running follow:** active files are polled and discovery is refreshed without retaining full log history in memory.
+- **Rotation handling:** truncation and inode replacement reopen the active source; rotated and gzip files remain searchable.
+- **Open-file control:** follow mode limits active descriptors and falls back to polling where needed.
+- **Terminal safety:** untrusted control characters are sanitized before terminal rendering.
+- **Backpressure:** a slow output consumer can delay refreshes because stdout and stderr writes remain synchronous.
+- **JSON mode:** paths and message text are preserved for downstream tools.
+
+## Troubleshooting Recipes
+
+### Investigate recent API timeouts
+
+```bash
+logc where api
+logc api 'timeout|reset' --since 30m -C 2
+logc api 'timeout|reset' --since 30m -f
+```
+
+### Identify a repeating error storm
+
+```bash
+logc watch ERROR api --since 30m
+```
+
+### Correlate application and platform failures
+
+```bash
+logc api ERROR --since 30m
+logc system api --since 30m
+logc docker --since 30m api
+```
 
 ## Roadmap
 
 ### Implemented
 
-- [x] Discover and fairly follow recent application logs across multiple files.
-- [x] Search active, rotated, and gzip-compressed logs with regex, context, time filtering, and deduplication.
-- [x] Resolve named sources, files, directories, globs, Linux processes/PIDs, and ports.
-- [x] Configure log roots, source groups, exclusions, noise filters, and MySQL/MariaDB log paths.
-- [x] Stream system logs and Docker container logs.
-- [x] Watch matching events with live error rates, duplicate counts, and first/last occurrence times.
-- [x] Classify and filter sources by category and configured module.
-- [x] Discover new files dynamically, follow file symlinks, and select default sources fairly.
-- [x] Search complete regular and gzip history without silent byte limits.
-- [x] Sanitize terminal output and report inaccessible roots.
+- [x] Discover, classify, and follow recent local logs.
+- [x] Search active, rotated, and gzip-compressed files.
+- [x] Resolve targets by name, path, PID, and listening port.
+- [x] Filter by time, category, module, context, and deduplication.
+- [x] Stream systemd journal and Docker container logs.
+- [x] Watch error rate, repeated events, and occurrence times.
+- [x] Detect common logrotate coverage and follow rotated files.
+- [x] Emit colored terminal output and structured JSON.
+- [x] Load defaults plus user-defined source groups from `~/.logc.conf`.
 
 ### Planned
 
-- [ ] Publish and maintain Homebrew package distribution.
+- [ ] Publish and maintain Homebrew distribution so `brew install logc` becomes available.
+- [ ] Publish and validate tagged binary releases for supported platforms.
+- [ ] Expand distribution-specific discovery fixtures and integration tests.
+- [ ] Improve source ranking for very large hosts.
+- [ ] Add optional shell completions and manual pages.
 
 ## Contributing
 
-logc is open source and free to use. Fork the repository, build the feature you need, and open a pull request.
+Contributions are welcome.
 
-- [Fork logc](https://github.com/debugc-clis/logc/fork)
-- [Report an issue](https://github.com/debugc-clis/logc/issues)
-- [Browse the source](https://github.com/debugc-clis/logc)
+1. Fork [debugc-clis/logc](https://github.com/debugc-clis/logc).
+2. Create a focused branch.
+3. Add tests for behavior changes.
+4. Run `go test ./...`.
+5. Open a pull request describing the operational problem and the chosen behavior.
+
+Please keep `logc` local-first, read-only, scriptable, and predictable.
 
 ## AI and Liability Notice
 
-Parts of this project were generated or assisted by AI and are provided as-is. To the maximum extent permitted by law, the author and contributors are not liable for any results, damages, losses, or other consequences arising from use of this software. Review and test it before using it in production.
+Parts of this project and its documentation may be generated or assisted by AI. AI-assisted changes should be reviewed and tested by maintainers and contributors before release.
+
+This software is provided without warranty. To the maximum extent permitted by law, the author and contributors are not liable for data loss, service interruption, lost profits, operational impact, or other direct or indirect damages resulting from installation, configuration, or use. Users remain responsible for validating the tool in their own environments.
