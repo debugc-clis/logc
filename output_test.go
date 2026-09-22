@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestPrinterDecoratesLogLevels(t *testing.T) {
 	printer := &printer{color: true}
@@ -36,5 +41,21 @@ func TestPrinterSanitizesTerminalControlSequences(t *testing.T) {
 	input := "INFO before\x1b[2Jafter\x1b]52;c;clipboard\x07\x00"
 	if got := printer.decorate(input); got != "INFO beforeafter" {
 		t.Fatalf("decorate returned %q", got)
+	}
+}
+
+func TestPrinterUsesInjectedWriterAndClock(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	fixed := time.Date(2026, 9, 21, 12, 34, 56, 0, time.UTC)
+	printer := &printer{stdout: &stdout, stderr: &stderr, now: func() time.Time { return fixed }}
+
+	printer.block("/tmp/app.log", []string{"INFO ready"}, "")
+	printer.infof("notice")
+
+	if !strings.Contains(stdout.String(), "[shown 12:34:56]") || !strings.Contains(stdout.String(), "INFO ready") {
+		t.Fatalf("unexpected stdout: %q", stdout.String())
+	}
+	if stderr.String() != "logc: notice\n" {
+		t.Fatalf("unexpected stderr: %q", stderr.String())
 	}
 }

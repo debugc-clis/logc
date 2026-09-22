@@ -481,28 +481,40 @@ func (f *follower) prepareReset(state *fileState, marker string) {
 }
 
 func (f *follower) readOpenFile(state *fileState) error {
-	info, err := state.File.Stat()
+	data, truncated, err := readOpenDelta(state)
 	if err != nil {
 		return err
 	}
+	if truncated {
+		f.prepareReset(state, "↻ file truncated")
+	}
+	f.queueAppended(state, data)
+	return nil
+}
+
+func readOpenDelta(state *fileState) ([]byte, bool, error) {
+	info, err := state.File.Stat()
+	if err != nil {
+		return nil, false, err
+	}
+	truncated := false
 	if info.Size() < state.Offset {
 		if _, err := state.File.Seek(0, io.SeekStart); err != nil {
-			return err
+			return nil, false, err
 		}
 		state.Offset = 0
-		f.prepareReset(state, "↻ file truncated")
+		truncated = true
 	}
 	state.Info = info
 	if info.Size() == state.Offset {
-		return nil
+		return nil, truncated, nil
 	}
 	data, err := io.ReadAll(io.LimitReader(state.File, maxFollowReadBytes))
 	if err != nil {
-		return err
+		return nil, truncated, err
 	}
 	state.Offset += int64(len(data))
-	f.queueAppended(state, data)
-	return nil
+	return data, truncated, nil
 }
 
 func (f *follower) replaceOpenFile(state *fileState) error {

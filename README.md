@@ -14,7 +14,7 @@ logc api 'timeout|reset' --since 30m -f
 | --- | --- |
 | `find + grep + zgrep + tail -F + journalctl` | `logc` |
 
-[View the landing page](https://www.logc.us/) · [Browse the source](https://github.com/debugc-clis/logc) · [Report an issue](https://github.com/debugc-clis/logc/issues)
+[View the landing page](https://logc.com/) · [Browse the source](https://github.com/debugc-clis/logc) · [Report an issue](https://github.com/debugc-clis/logc/issues)
 
 > [!IMPORTANT]
 > Homebrew packaging is **still being worked on**. `brew install logc` is not available yet; use the source installation below.
@@ -42,6 +42,14 @@ It intentionally stays local and transparent. It does not upload logs, run AI an
 
 Requires Go 1.22 or newer.
 
+Install directly with Go:
+
+```bash
+go install github.com/debugc-clis/logc@latest
+```
+
+Or build from a checkout:
+
 ```bash
 git clone https://github.com/debugc-clis/logc.git
 cd logc
@@ -56,12 +64,6 @@ For a user-local installation:
 mkdir -p ~/.local/bin
 install -m 0755 ./logc ~/.local/bin/logc
 export PATH="$HOME/.local/bin:$PATH"
-```
-
-You can also install from the checked-out source with:
-
-```bash
-go install .
 ```
 
 ### Homebrew — working on it
@@ -225,7 +227,7 @@ logc docker --since 30m --timestamps api
 logc docker --details api
 ```
 
-`logc docker CONTAINER [docker logs options]` preserves Docker's logging behavior while keeping the command under the same `logc` workflow. The container name or ID is passed directly to `docker logs`.
+`logc docker [docker logs options] CONTAINER` preserves Docker's logging behavior while keeping the command under the same `logc` workflow. The container name or ID is passed directly to `docker logs`.
 
 ### 7. Inspect discovered sources
 
@@ -268,13 +270,13 @@ The user configuration file is `~/.logc.conf`.
 Create a starter configuration:
 
 ```bash
-logc init-config
+logc config init
 ```
 
 Print the effective merged configuration:
 
 ```bash
-logc show-config
+logc config show
 ```
 
 ### Minimal example
@@ -283,6 +285,9 @@ logc show-config
 default_log_dir=/var/log
 default_log_dir=/opt/var/log
 default_log_dir=/opt/log
+
+system_log=/var/log/syslog
+system_log=/var/log/messages
 
 lines=10
 max_files=20
@@ -310,6 +315,7 @@ Custom source sections use `[group.NAME]`; a bare section such as `[api]` is not
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `default_log_dir` | common Linux log roots | Directories scanned for logs |
+| `system_log` | distribution defaults | Traditional system logs used when journald is unavailable |
 | `lines` | `10` | Initial lines shown per file |
 | `max_files` | `20` | Maximum files selected |
 | `recent` | `24h` | Recent-file discovery window |
@@ -326,9 +332,9 @@ Built-in discovery includes common application, web-server, and database locatio
 
 ### Distribution-aware system paths
 
-`logc` recognizes commonly used debugging logs across Debian, Ubuntu, CentOS, RHEL, Fedora, Amazon Linux, Alpine, Arch, and related distributions. It keeps the most useful system sources—such as general messages, kernel, daemon, audit, and package-independent service failures—while excluding user-session, cron, and installer noise from default application discovery.
+`logc` recognizes commonly used debugging logs across Debian, Ubuntu, CentOS, RHEL, Fedora, Amazon Linux, Alpine, Arch, and related distributions. It keeps general messages, kernel, authentication, security, and firewall logs out of normal application discovery, then uses the correct traditional files as a `logc system` fallback when journald is unavailable. User-session, cron, and installer noise are not included in the default system source set.
 
-Use `logc system` for system logs and override the built-in paths in `~/.logc.conf` when the machine uses a custom layout.
+Use `logc system` for system logs. Override the detected file set with `system_log=!` followed by one or more `system_log=/custom/path` entries when the machine uses a custom layout.
 
 ### Logrotate awareness
 

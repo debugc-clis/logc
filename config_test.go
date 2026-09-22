@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -84,6 +85,55 @@ func TestSystemLogExcludesUseLinuxDistribution(t *testing.T) {
 	for _, pattern := range []string{"/var/log/dnf/**", "/var/log/yum.log*", "/var/log/cron*", "/var/log/maillog*"} {
 		if containsString(centos, pattern) {
 			t.Fatalf("centos should not load non-debug system path %q: %#v", pattern, centos)
+		}
+	}
+}
+
+func TestSystemLogPathsUseLinuxDistribution(t *testing.T) {
+	debian := defaultConfigForPlatform("linux", "ID=ubuntu\nID_LIKE=debian")
+	if !containsString(debian.SystemLogPaths, "/var/log/syslog") || !containsString(debian.SystemLogPaths, "/var/log/auth.log") {
+		t.Fatalf("unexpected Debian system logs: %v", debian.SystemLogPaths)
+	}
+	if containsString(debian.SystemLogPaths, "/var/log/cron") || containsString(debian.SystemLogPaths, "/var/log/installer") {
+		t.Fatalf("user/cron/installer noise should not be included: %v", debian.SystemLogPaths)
+	}
+
+	rhel := defaultConfigForPlatform("linux", "ID=rocky\nID_LIKE=\"rhel centos fedora\"")
+	if !containsString(rhel.SystemLogPaths, "/var/log/messages") || !containsString(rhel.SystemLogPaths, "/var/log/secure") {
+		t.Fatalf("unexpected RHEL system logs: %v", rhel.SystemLogPaths)
+	}
+}
+
+func TestConfigCanOverrideSystemLogPaths(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "logc.conf")
+	if err := os.WriteFile(path, []byte("system_log=!\nsystem_log=/custom/system.log\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LOGC_CONFIG", path)
+
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.SystemLogPaths) != 1 || cfg.SystemLogPaths[0] != "/custom/system.log" {
+		t.Fatalf("unexpected system log override: %v", cfg.SystemLogPaths)
+	}
+}
+
+func TestWriteDefaultConfigUsesDetectedSystemLogs(t *testing.T) {
+	directory := t.TempDir()
+	t.Setenv("LOGC_CONFIG", filepath.Join(directory, "logc.conf"))
+	if err := writeDefaultConfig(false); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(configPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range defaultConfig().SystemLogPaths {
+		if !strings.Contains(string(body), "system_log="+path+"\n") {
+			t.Fatalf("generated config missing detected path %q:\n%s", path, body)
 		}
 	}
 }

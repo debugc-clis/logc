@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"runtime"
@@ -29,6 +31,7 @@ USAGE
   logc docker [OPTIONS] NAME   Follow a Docker container's logs
   logc ls [FILTERS]            Discover classified local log sources
   logc where TARGET            Show what a target resolves to
+  logc config {init|path|show} Manage user configuration
 
 EXAMPLES
   logc api
@@ -242,6 +245,10 @@ func realMain() int {
 			return 0
 		case "config":
 			return configCommand(os.Args[2:])
+		case "init-config":
+			return configCommand(append([]string{"init"}, os.Args[2:]...))
+		case "show-config":
+			return configCommand(append([]string{"show"}, os.Args[2:]...))
 		case "system":
 			return systemCommand(os.Args[2:])
 		case "watch":
@@ -598,7 +605,7 @@ func systemCommand(args []string) int {
 	out.json = opts.JSON
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	err = runSystemLogsFiltered(ctx, lines, kernel, query, out)
+	err = runSystemLogsFiltered(ctx, cfg, lines, kernel, query, out)
 	if err != nil && ctx.Err() == nil {
 		fmt.Fprintln(os.Stderr, "logc system:", err)
 		return 1
@@ -608,11 +615,14 @@ func systemCommand(args []string) int {
 
 func listCommand(args []string) int {
 	var categories, modules []string
+	jsonOutput := false
 	for index := 0; index < len(args); index++ {
 		switch args[index] {
+		case "--json":
+			jsonOutput = true
 		case "--category", "--module":
 			if index+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "logc: usage: logc ls [--category LIST] [--module LIST]")
+				fmt.Fprintln(os.Stderr, "logc: usage: logc ls [--category LIST] [--module LIST] [--json]")
 				return 2
 			}
 			value := args[index+1]
@@ -623,7 +633,7 @@ func listCommand(args []string) int {
 				modules = append(modules, value)
 			}
 		default:
-			fmt.Fprintln(os.Stderr, "logc: usage: logc ls [--category LIST] [--module LIST]")
+			fmt.Fprintln(os.Stderr, "logc: usage: logc ls [--category LIST] [--module LIST] [--json]")
 			return 2
 		}
 	}
@@ -648,13 +658,16 @@ func listCommand(args []string) int {
 		filtered = append(filtered, source)
 	}
 	sources = filtered
-	if len(sources) == 0 {
+	if len(sources) == 0 && !jsonOutput {
 		fmt.Println("no application log sources discovered")
 		return 0
 	}
 	logrotate := defaultLogrotateRegistry()
 	for _, warning := range logrotate.warnings {
 		fmt.Fprintln(os.Stderr, "logc: warning:", sanitizeTerminalText(warning))
+	}
+	if jsonOutput {
+		return writeSourceListJSON(os.Stdout, sources, logrotate)
 	}
 	fmt.Printf("%-28s %-10s %-14s %-7s %-7s %-10s %-8s %s\n", "ID", "CATEGORY", "MODULE", "TYPE", "FILES", "LATEST", "ROTATE", "LOCATION")
 	for _, s := range sources {
@@ -663,6 +676,35 @@ func listCommand(args []string) int {
 			root = s.Paths[0]
 		}
 		fmt.Printf("%-28s %-10s %-14s %-7s %-7d %-10s %-8s %s\n", sanitizeTerminalText(s.ID), sanitizeTerminalText(s.Category), sanitizeTerminalText(s.Module), s.Kind, len(s.Paths), formatAge(s.Latest), logrotateStatus(s.Paths, logrotate), sanitizeTerminalText(root))
+	}
+	return 0
+}
+
+func writeSourceListJSON(out io.Writer, sources []sourceSummary, logrotate *logrotateRegistry) int {
+	type sourceRow struct {
+		ID       string    `json:"id"`
+		Category string    `json:"category"`
+		Module   string    `json:"module"`
+		Type     string    `json:"type"`
+		Files    int       `json:"files"`
+		Latest   time.Time `json:"latest,omitempty"`
+		Rotate   string    `json:"logrotate"`
+		Location string    `json:"location"`
+	}
+	rows := make([]sourceRow, 0, len(sources))
+	for _, source := range sources {
+		location := source.Root
+		if location == "" && len(source.Paths) > 0 {
+			location = source.Paths[0]
+		}
+		rows = append(rows, sourceRow{
+			ID: source.ID, Category: source.Category, Module: source.Module, Type: source.Kind,
+			Files: len(source.Paths), Latest: source.Latest, Rotate: logrotateStatus(source.Paths, logrotate), Location: location,
+		})
+	}
+	if err := json.NewEncoder(out).Encode(rows); err != nil {
+		fmt.Fprintln(os.Stderr, "logc:", err)
+		return 1
 	}
 	return 0
 }
@@ -692,8 +734,21 @@ func formatAgeAt(timestamp, now time.Time) string {
 }
 
 func whereCommand(args []string) int {
-	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "logc: usage: logc where TARGET")
+	jsonOutput := false
+	var target string
+	for _, arg := range args {
+		switch {
+		case arg == "--json":
+			jsonOutput = true
+		case strings.HasPrefix(arg, "-") || target != "":
+			fmt.Fprintln(os.Stderr, "logc: usage: logc where [--json] TARGET")
+			return 2
+		default:
+			target = arg
+		}
+	}
+	if target == "" {
+		fmt.Fprintln(os.Stderr, "logc: usage: logc where [--json] TARGET")
 		return 2
 	}
 	cfg, err := loadConfig()
@@ -701,25 +756,56 @@ func whereCommand(args []string) int {
 		fmt.Fprintln(os.Stderr, "logc:", err)
 		return 1
 	}
-	r, err := resolveTarget(cfg, args[0], true)
+	r, err := resolveTarget(cfg, target, true)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "logc:", err)
 		return 1
 	}
 	if r.JournalUnit != "" {
-		fmt.Printf("%s -> systemd:%s\n", args[0], r.JournalUnit)
+		if jsonOutput {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"target": target, "type": "systemd", "unit": r.JournalUnit})
+			return 0
+		}
+		fmt.Printf("%s -> systemd:%s\n", target, r.JournalUnit)
 		return 0
 	}
 	logrotate := defaultLogrotateRegistry()
 	for _, warning := range logrotate.warnings {
 		fmt.Fprintln(os.Stderr, "logc: warning:", sanitizeTerminalText(warning))
 	}
-	for _, p := range uniqueSorted(r.Paths) {
+	paths := uniqueSorted(r.Paths)
+	if jsonOutput {
+		return writeResolvedTargetJSON(os.Stdout, cfg, target, paths, logrotate)
+	}
+	for _, p := range paths {
 		suffix := ""
 		if logrotate.managed(p) {
 			suffix = " [logrotate]"
 		}
 		fmt.Println(sanitizeTerminalText(p) + suffix)
+	}
+	return 0
+}
+
+func writeResolvedTargetJSON(out io.Writer, cfg Config, target string, paths []string, logrotate *logrotateRegistry) int {
+	type resolvedPath struct {
+		Path      string `json:"path"`
+		Category  string `json:"category"`
+		Module    string `json:"module"`
+		Logrotate bool   `json:"logrotate"`
+	}
+	result := struct {
+		Target string         `json:"target"`
+		Type   string         `json:"type"`
+		Paths  []resolvedPath `json:"paths"`
+	}{Target: target, Type: "files", Paths: make([]resolvedPath, 0, len(paths))}
+	for _, path := range paths {
+		category, module := sourceMetadata(cfg, path)
+		result.Paths = append(result.Paths, resolvedPath{Path: path, Category: category, Module: module, Logrotate: logrotate.managed(path)})
+	}
+	if err := json.NewEncoder(out).Encode(result); err != nil {
+		fmt.Fprintln(os.Stderr, "logc:", err)
+		return 1
 	}
 	return 0
 }

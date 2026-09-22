@@ -224,15 +224,21 @@ func (w *alertWatcher) addPath(path string, observeInitial bool) {
 	if _, ok := w.states[path]; ok {
 		return
 	}
-	lines, offset, info, err := readLastLines(path, w.cfg.Lines)
+	openFiles := 0
+	for _, state := range w.states {
+		if state.File != nil {
+			openFiles++
+		}
+	}
+	lines, state, err := openFileState(path, w.cfg.Lines, openFiles < maxOpenFollowFiles)
 	if err != nil {
 		w.reportFailure(path, err)
 		return
 	}
 	w.clearFailure(path)
-	w.states[path] = &fileState{Path: path, Info: info, Offset: offset}
+	w.states[path] = state
 	if observeInitial {
-		w.observe(path, lines, time.Now(), info.ModTime())
+		w.observe(path, lines, time.Now(), state.Info.ModTime())
 	}
 }
 
@@ -266,6 +272,7 @@ func (w *alertWatcher) rescan(observeInitial bool) {
 	}
 	for path := range w.states {
 		if !active[path] {
+			w.states[path].close()
 			delete(w.states, path)
 			w.clearFailure(path)
 		}
@@ -275,6 +282,14 @@ func (w *alertWatcher) rescan(observeInitial bool) {
 
 func (w *alertWatcher) poll() {
 	for path, state := range w.states {
+		if state.File != nil {
+			if err := w.pollOpenState(path, state); err != nil {
+				w.reportFailure(path, err)
+				continue
+			}
+			w.clearFailure(path)
+			continue
+		}
 		info, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) && state.MissingSince.IsZero() {
@@ -286,15 +301,7 @@ func (w *alertWatcher) poll() {
 		state.MissingSince = time.Time{}
 		w.clearFailure(path)
 		if state.Info != nil && !os.SameFile(state.Info, info) {
-			lines, offset, nextInfo, err := readLastLines(path, w.cfg.Lines)
-			if err == nil {
-				state.Info, state.Offset, state.Carry, state.CarryTruncated = nextInfo, offset, "", false
-				w.observe(path, lines, time.Now(), nextInfo.ModTime())
-			}
-			if err != nil {
-				w.reportFailure(path, err)
-			}
-			continue
+			state.Info, state.Offset, state.Carry, state.CarryTruncated = info, 0, "", false
 		}
 		if info.Size() < state.Offset {
 			state.Offset, state.Carry, state.CarryTruncated = 0, "", false
@@ -315,6 +322,57 @@ func (w *alertWatcher) poll() {
 		observedAt := time.Now()
 		w.observe(path, parts, observedAt, observedAt)
 	}
+}
+
+func (w *alertWatcher) pollOpenState(path string, state *fileState) error {
+	if err := w.observeOpenDelta(path, state); err != nil {
+		return err
+	}
+	pathInfo, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) && state.MissingSince.IsZero() {
+			state.MissingSince = time.Now()
+		}
+		return err
+	}
+	state.MissingSince = time.Time{}
+	if state.Info == nil || os.SameFile(state.Info, pathInfo) {
+		return nil
+	}
+
+	if state.Carry != "" {
+		line := state.Carry
+		if state.CarryTruncated {
+			line = "[truncated long line] " + line
+		}
+		w.observe(path, []string{line}, time.Now(), state.Info.ModTime())
+	}
+	next, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	previous := state.File
+	state.File, state.Info, state.Offset = next, pathInfo, 0
+	state.Carry, state.CarryTruncated = "", false
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return w.observeOpenDelta(path, state)
+}
+
+func (w *alertWatcher) observeOpenDelta(path string, state *fileState) error {
+	data, truncated, err := readOpenDelta(state)
+	if err != nil {
+		return err
+	}
+	if truncated {
+		state.Carry, state.CarryTruncated = "", false
+	}
+	parts, carry, carryTruncated := splitAppended(state.Carry, state.CarryTruncated, data)
+	state.Carry, state.CarryTruncated = carry, carryTruncated
+	observedAt := time.Now()
+	w.observe(path, parts, observedAt, observedAt)
+	return nil
 }
 
 func compactSourcePath(cfg Config, path string) string {
@@ -398,6 +456,11 @@ func formatAlertTime(timestamp time.Time, approximate bool) string {
 }
 
 func (w *alertWatcher) run(ctx context.Context, out io.Writer, color, clear bool) {
+	defer func() {
+		for _, state := range w.states {
+			state.close()
+		}
+	}()
 	if len(w.bootstrapPaths) > 0 {
 		w.bootstrap()
 	}

@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
+	"time"
 )
 
 func runSystemLogs(ctx context.Context, lines int, kernelOnly bool) error {
@@ -35,7 +37,7 @@ func systemLogsCommand(ctx context.Context, lines int, kernelOnly bool, query Qu
 			} else {
 				return nil, fmt.Errorf("dmesg not found")
 			}
-		} else if path, err := exec.LookPath("journalctl"); err == nil {
+		} else if path, ok := journaldCommand(); ok {
 			args := []string{"--follow", "--output", "short-iso", "--no-pager"}
 			if !query.All {
 				if query.Since.IsZero() {
@@ -64,12 +66,73 @@ func systemLogsCommand(ctx context.Context, lines int, kernelOnly bool, query Qu
 	return cmd, nil
 }
 
-func runSystemLogsFiltered(ctx context.Context, lines int, kernelOnly bool, query Query, out *printer) error {
+func runSystemLogsFiltered(ctx context.Context, cfg Config, lines int, kernelOnly bool, query Query, out *printer) error {
+	if runtime.GOOS == "linux" && !kernelOnly {
+		if _, ok := journaldCommand(); !ok {
+			if paths := resolveSystemLogFiles(cfg, false); len(paths) > 0 {
+				return runSystemFileLogs(ctx, cfg, paths, lines, query, out)
+			}
+		}
+	}
 	cmd, err := systemLogsCommand(ctx, lines, kernelOnly, query)
 	if err != nil {
 		return err
 	}
 	return runFilteredCommand(ctx, cmd, "system", query, out)
+}
+
+func journaldCommand() (string, bool) {
+	path, err := exec.LookPath("journalctl")
+	if err != nil {
+		return "", false
+	}
+	for _, socket := range []string{"/run/systemd/journal/socket", "/run/systemd/journal/stdout"} {
+		if _, err := os.Stat(socket); err == nil {
+			return path, true
+		}
+	}
+	return "", false
+}
+
+func resolveSystemLogFiles(cfg Config, includeHistory bool) []string {
+	paths, err := resolvePatternsWithHistory(cfg.SystemLogPaths, nil, includeHistory)
+	if err != nil {
+		return nil
+	}
+	if includeHistory {
+		paths = expandRotatedSiblings(paths, nil)
+	}
+	return uniqueSorted(paths)
+}
+
+func runSystemFileLogs(ctx context.Context, cfg Config, activePaths []string, lines int, query Query, out *printer) error {
+	searchMode := query.Regex != nil || !query.Since.IsZero() || query.All
+	if searchMode {
+		paths := activePaths
+		if query.All || !query.Since.IsZero() {
+			paths = resolveSystemLogFiles(cfg, true)
+		}
+		sortRecentFirst(paths)
+		if query.All || !query.Since.IsZero() {
+			matches := searchPaths(paths, query, out)
+			if query.Regex != nil {
+				out.infof("%d matching lines", matches)
+			}
+		} else {
+			showSnapshot(paths, lines, query, out)
+		}
+	} else {
+		sort.Strings(activePaths)
+		showSnapshot(activePaths, lines, query, out)
+	}
+
+	followQuery := query
+	followQuery.Since = time.Time{}
+	followerConfig := cfg
+	followerConfig.Lines = lines
+	f := newFollower(followerConfig, cfg.SystemLogPaths, nil, out, followQuery, true)
+	f.run(ctx)
+	return nil
 }
 
 func unitCommand(ctx context.Context, unit string, lines int, follow bool, q Query) (*exec.Cmd, error) {

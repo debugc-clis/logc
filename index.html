@@ -43,7 +43,6 @@
     "operatingSystem": "Linux, macOS",
     "description": "A free, open-source command-line tool that discovers local logs, searches recent events first, and follows application and system logs.",
     "url": "https://logc.com/",
-    "downloadUrl": "https://github.com/debugc-clis/logc/releases",
     "codeRepository": "https://github.com/debugc-clis/logc",
     "license": "https://github.com/debugc-clis/logc/blob/main/LICENSE",
     "offers": {
@@ -172,7 +171,7 @@
     }
     .hero-install-row{display:flex;align-items:flex-start;gap:12px;margin-top:16px}
     .hero-actions{display:flex;gap:14px;flex-wrap:wrap}
-    .hero-install-wrap{width:280px;flex:0 1 280px}
+    .hero-install-wrap{width:390px;flex:0 1 390px;max-width:100%}
     .hero-install{
       display:flex;align-items:center;gap:12px;width:100%;
       padding:10px 12px 10px 14px;border:1px solid rgba(167,120,255,.38);border-radius:4px;
@@ -474,10 +473,10 @@
               <div class="hero-install-wrap" id="install">
                 <div class="hero-install">
                   <span class="prompt">$</span>
-                  <code id="installText">brew install logc</code>
+                  <code id="installText">go install github.com/debugc-clis/logc@latest</code>
                   <button class="copy" type="button" onclick="copyInstall(this)">COPY</button>
                 </div>
-                <div class="hero-install-note">*Homebrew installation is under construction.</div>
+                <div class="hero-install-note">Requires Go 1.22+. Homebrew installation is still under construction.</div>
               </div>
               <div class="hero-actions">
                 <a class="btn" href="#examples">Read the Docs</a>
@@ -822,7 +821,7 @@ USAGE
       <div>
         <div class="footer-heading">Project</div>
         <div class="footer-links">
-          <a href="https://github.com/debugc-clis/logc" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://github.com/debugc-clis/logc#readme" target="_blank" rel="noopener noreferrer">Docs</a><a href="https://github.com/debugc-clis/logc/releases" target="_blank" rel="noopener noreferrer">Releases</a><a href="https://github.com/debugc-clis/logc/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a>
+          <a href="https://github.com/debugc-clis/logc" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://github.com/debugc-clis/logc#readme" target="_blank" rel="noopener noreferrer">Docs</a><a href="https://github.com/debugc-clis/logc/issues" target="_blank" rel="noopener noreferrer">Issues</a><a href="https://github.com/debugc-clis/logc/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a>
         </div>
       </div>
       <div>

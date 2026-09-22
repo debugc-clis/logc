@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -159,6 +160,44 @@ func TestResolveWatchArgsKeepsLegacyTargetFirstSyntax(t *testing.T) {
 	}
 	if pattern != "timeout|reset" || len(resolved.Paths) != 1 || resolved.Paths[0] != path {
 		t.Fatalf("pattern=%q paths=%#v", pattern, resolved.Paths)
+	}
+}
+
+func TestAlertWatcherReadsEntireReplacementFile(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "api.log")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := defaultConfigForPlatform(runtime.GOOS, "")
+	cfg.Lines = 2
+	query, err := buildQuery("ERROR", false, time.Time{}, 0, 0, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	watcher := newAlertWatcher(cfg, []string{path}, nil, nil, query)
+	watcher.addPath(path, false)
+	t.Cleanup(func() {
+		for _, state := range watcher.states {
+			state.close()
+		}
+	})
+
+	if err := os.Rename(path, path+".1"); err != nil {
+		t.Fatal(err)
+	}
+	var replacement strings.Builder
+	for index := 0; index < 5; index++ {
+		fmt.Fprintf(&replacement, "2026-08-13 10:00:%02d ERROR replacement failure\n", index)
+	}
+	if err := os.WriteFile(path, []byte(replacement.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	watcher.poll()
+	alerts, _ := watcher.tracker.summaries(time.Date(2026, time.August, 13, 10, 1, 0, 0, time.Local))
+	if len(alerts) != 1 || alerts[0].Count != 5 {
+		t.Fatalf("expected all replacement lines, got %#v", alerts)
 	}
 }
 

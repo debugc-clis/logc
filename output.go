@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -12,6 +13,9 @@ import (
 type printer struct {
 	color      bool
 	json       bool
+	stdout     io.Writer
+	stderr     io.Writer
+	now        func() time.Time
 	sourceMeta func(string) (string, string)
 	logrotate  func(string) bool
 }
@@ -32,7 +36,28 @@ func newPrinter(enabled bool) *printer {
 	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
 		enabled = false
 	}
-	return &printer{color: enabled && tty}
+	return &printer{color: enabled && tty, stdout: os.Stdout, stderr: os.Stderr, now: time.Now}
+}
+
+func (p *printer) output() io.Writer {
+	if p.stdout != nil {
+		return p.stdout
+	}
+	return os.Stdout
+}
+
+func (p *printer) errors() io.Writer {
+	if p.stderr != nil {
+		return p.stderr
+	}
+	return os.Stderr
+}
+
+func (p *printer) timestamp() time.Time {
+	if p.now != nil {
+		return p.now()
+	}
+	return time.Now()
 }
 
 func (p *printer) header(path, suffix string) string {
@@ -52,7 +77,7 @@ func (p *printer) header(path, suffix string) string {
 		suffix += "logrotate"
 	}
 	suffix = sanitizeTerminalText(suffix)
-	ts := time.Now().Format("15:04:05")
+	ts := p.timestamp().Format("15:04:05")
 	meta := ts
 	if suffix != "" {
 		meta += " · " + suffix
@@ -145,7 +170,7 @@ func (p *printer) block(path string, lines []string, suffix string) {
 		if p.sourceMeta != nil {
 			category, module = p.sourceMeta(path)
 		}
-		_ = json.NewEncoder(os.Stdout).Encode(struct {
+		_ = json.NewEncoder(p.output()).Encode(struct {
 			Path      string   `json:"path"`
 			Category  string   `json:"category,omitempty"`
 			Module    string   `json:"module,omitempty"`
@@ -153,28 +178,28 @@ func (p *printer) block(path string, lines []string, suffix string) {
 			Time      string   `json:"time"`
 			Suffix    string   `json:"suffix,omitempty"`
 			Lines     []string `json:"lines"`
-		}{Path: path, Category: category, Module: module, Logrotate: p.logrotate != nil && p.logrotate(path), Time: time.Now().Format(time.RFC3339), Suffix: suffix, Lines: lines})
+		}{Path: path, Category: category, Module: module, Logrotate: p.logrotate != nil && p.logrotate(path), Time: p.timestamp().Format(time.RFC3339), Suffix: suffix, Lines: lines})
 		return
 	}
-	fmt.Println()
-	fmt.Println(p.header(path, suffix))
+	fmt.Fprintln(p.output())
+	fmt.Fprintln(p.output(), p.header(path, suffix))
 	if len(lines) == 0 {
 		if p.color {
-			fmt.Println("  \x1b[2m(empty)\x1b[0m")
+			fmt.Fprintln(p.output(), "  \x1b[2m(empty)\x1b[0m")
 		} else {
-			fmt.Println("  (empty)")
+			fmt.Fprintln(p.output(), "  (empty)")
 		}
 		return
 	}
 	for _, line := range lines {
 		line = strings.TrimSuffix(line, "\r")
-		fmt.Printf("  %s\n", p.decorate(line))
+		fmt.Fprintf(p.output(), "  %s\n", p.decorate(line))
 	}
 }
 
 func (p *printer) infof(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "logc: %s\n", sanitizeTerminalText(fmt.Sprintf(format, args...)))
+	fmt.Fprintf(p.errors(), "logc: %s\n", sanitizeTerminalText(fmt.Sprintf(format, args...)))
 }
 func (p *printer) errorf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "logc: error: %s\n", sanitizeTerminalText(fmt.Sprintf(format, args...)))
+	fmt.Fprintf(p.errors(), "logc: error: %s\n", sanitizeTerminalText(fmt.Sprintf(format, args...)))
 }

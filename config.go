@@ -14,6 +14,7 @@ import (
 
 type Config struct {
 	DefaultLogDirs  []string
+	SystemLogPaths  []string
 	Excludes        []string
 	IgnoreLines     []string
 	Groups          map[string][]string
@@ -36,6 +37,7 @@ func defaultConfig() Config {
 func defaultConfigForPlatform(goos, osRelease string) Config {
 	return Config{
 		DefaultLogDirs: []string{"/var/log", "/opt/var/log", "/opt/log"},
+		SystemLogPaths: systemLogPaths(goos, osRelease),
 		Excludes:       systemLogExcludes(goos, osRelease),
 		Groups: map[string][]string{
 			"mysql": {
@@ -56,6 +58,33 @@ func defaultConfigForPlatform(goos, osRelease string) Config {
 		MaxBufferLines:  2000,
 		Recent:          24 * time.Hour,
 		Color:           true,
+	}
+}
+
+func systemLogPaths(goos, osRelease string) []string {
+	if goos == "darwin" {
+		return []string{"/var/log/system.log"}
+	}
+	if goos != "linux" {
+		return nil
+	}
+
+	distros := osReleaseIDs(osRelease)
+	switch {
+	case distros["debian"] || distros["ubuntu"] || distros["linuxmint"] || distros["raspbian"]:
+		return []string{"/var/log/syslog", "/var/log/kern.log", "/var/log/auth.log"}
+	case distros["rhel"] || distros["centos"] || distros["fedora"] || distros["rocky"] || distros["almalinux"] || distros["amzn"]:
+		return []string{"/var/log/messages", "/var/log/secure"}
+	case distros["sles"] || distros["opensuse"] || distros["opensuse-leap"] || distros["opensuse-tumbleweed"]:
+		return []string{"/var/log/messages", "/var/log/warn", "/var/log/firewall"}
+	case distros["alpine"]:
+		return []string{"/var/log/messages"}
+	case distros["gentoo"]:
+		return []string{"/var/log/messages"}
+	case distros["arch"] || distros["manjaro"]:
+		return nil
+	default:
+		return []string{"/var/log/syslog", "/var/log/messages", "/var/log/kern.log", "/var/log/auth.log", "/var/log/secure"}
 	}
 }
 
@@ -227,6 +256,14 @@ func loadConfig() (Config, error) {
 			} else {
 				cfg.DefaultLogDirs = appendUnique(cfg.DefaultLogDirs, expandHome(v))
 			}
+		case "system_log":
+			if v == "!" {
+				cfg.SystemLogPaths = nil
+			} else if strings.HasPrefix(v, "!") {
+				cfg.SystemLogPaths = removeString(cfg.SystemLogPaths, expandHome(strings.TrimPrefix(v, "!")))
+			} else {
+				cfg.SystemLogPaths = appendUnique(cfg.SystemLogPaths, expandHome(v))
+			}
 		case "exclude":
 			if strings.HasPrefix(v, "!") {
 				cfg.Excludes = removeString(cfg.Excludes, expandHome(strings.TrimPrefix(v, "!")))
@@ -300,6 +337,12 @@ func writeDefaultConfig(force bool) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
+	var systemLogs strings.Builder
+	systemLogs.WriteString("# Traditional system-log files used when journald is unavailable.\n")
+	systemLogs.WriteString("# Reset detected defaults with system_log=! before adding custom paths.\n")
+	for _, path := range defaultConfig().SystemLogPaths {
+		fmt.Fprintf(&systemLogs, "system_log=%s\n", path)
+	}
 	body := `# logc user configuration
 # Keep this small: logc is designed to discover logs automatically.
 
@@ -307,6 +350,7 @@ default_log_dir=/var/log
 default_log_dir=/opt/var/log
 default_log_dir=/opt/log
 
+` + systemLogs.String() + `
 # logc loads built-in system-log exclusions for the detected Linux distribution.
 # Add exclude= rules here, or prefix an exact built-in pattern with ! to re-include it.
 # Run logc config show to inspect the active built-in patterns.
@@ -350,6 +394,9 @@ func printConfig(cfg Config) {
 	fmt.Printf("config=%s\n", configPath())
 	for _, d := range cfg.DefaultLogDirs {
 		fmt.Printf("default_log_dir=%s\n", d)
+	}
+	for _, path := range cfg.SystemLogPaths {
+		fmt.Printf("system_log=%s\n", path)
 	}
 	for _, e := range cfg.Excludes {
 		fmt.Printf("exclude=%s\n", e)
