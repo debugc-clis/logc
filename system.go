@@ -179,7 +179,7 @@ func runFilteredCommand(ctx context.Context, cmd *exec.Cmd, source string, q Que
 	if err != nil {
 		return err
 	}
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = out.errors()
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -198,11 +198,11 @@ func runFilteredCommand(ctx context.Context, cmd *exec.Cmd, source string, q Que
 				continue
 			}
 			if !headerShown {
-				fmt.Println()
-				fmt.Println(out.header(source, "following"))
+				fmt.Fprintln(out.output())
+				fmt.Fprintln(out.output(), out.header(source, "following"))
 				headerShown = true
 			}
-			fmt.Printf("  %s\n", out.decorate(selected))
+			fmt.Fprintf(out.output(), "  %s\n", out.decorate(selected))
 		}
 	}
 	if summary, ok := takeStreamDedupSummary(state); ok {
@@ -210,13 +210,16 @@ func runFilteredCommand(ctx context.Context, cmd *exec.Cmd, source string, q Que
 			out.block(source, []string{summary}, "")
 		} else {
 			if !headerShown {
-				fmt.Println()
-				fmt.Println(out.header(source, "following"))
+				fmt.Fprintln(out.output())
+				fmt.Fprintln(out.output(), out.header(source, "following"))
 			}
-			fmt.Printf("  %s\n", out.decorate(summary))
+			fmt.Fprintf(out.output(), "  %s\n", out.decorate(summary))
 		}
 	}
 	scanErr := s.Err()
+	if scanErr != nil {
+		stopLogCommand(cmd, pipe)
+	}
 	waitErr := cmd.Wait()
 	if scanErr != nil {
 		return scanErr

@@ -69,11 +69,25 @@ func dockerCommand(args []string) int {
 	defer stop()
 	cmd := exec.CommandContext(ctx, docker, dockerLogsArgs(dockerInput)...)
 	cmd.Stdin = os.Stdin
+	source := "docker:" + dockerInput[len(dockerInput)-1]
+	if err := runDockerLogCommand(ctx, cmd, source, query, out); err != nil && ctx.Err() == nil {
+		fmt.Fprintln(os.Stderr, "logc docker:", err)
+		return 1
+	}
+	return 0
+}
+
+func runDockerLogCommand(ctx context.Context, cmd *exec.Cmd, source string, query Query, out *printer) error {
 	reader, writer := io.Pipe()
+	defer reader.Close()
 	cmd.Stdout, cmd.Stderr = writer, writer
+	if err := cmd.Start(); err != nil {
+		_ = writer.Close()
+		return err
+	}
 	done := make(chan error, 1)
 	go func() {
-		runErr := cmd.Run()
+		runErr := cmd.Wait()
 		_ = writer.Close()
 		done <- runErr
 	}()
@@ -82,13 +96,12 @@ func dockerCommand(args []string) int {
 	scanner.Buffer(make([]byte, 64*1024), maxCarryBytes)
 	filter := &follower{query: query}
 	state := &fileState{}
-	source := "docker:" + dockerInput[len(dockerInput)-1]
 	for scanner.Scan() {
 		for _, selected := range filter.streamFilter(state, []string{strings.TrimSuffix(scanner.Text(), "\r")}) {
 			if out.json {
 				out.block(source, []string{selected}, "")
 			} else {
-				fmt.Println(out.decorate(selected))
+				fmt.Fprintln(out.output(), out.decorate(selected))
 			}
 		}
 	}
@@ -96,19 +109,22 @@ func dockerCommand(args []string) int {
 		if out.json {
 			out.block(source, []string{summary}, "")
 		} else {
-			fmt.Println(out.decorate(summary))
+			fmt.Fprintln(out.output(), out.decorate(summary))
 		}
 	}
+	scanErr := scanner.Err()
+	if scanErr != nil {
+		_ = reader.CloseWithError(scanErr)
+		stopLogCommand(cmd, reader)
+	}
 	runErr := <-done
-	if scanErr := scanner.Err(); scanErr != nil && ctx.Err() == nil {
-		fmt.Fprintln(os.Stderr, "logc docker:", scanErr)
-		return 1
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
-	if runErr != nil && ctx.Err() == nil {
-		fmt.Fprintln(os.Stderr, "logc docker:", runErr)
-		return 1
+	if scanErr != nil {
+		return scanErr
 	}
-	return 0
+	return runErr
 }
 
 type dockerViewOptions struct {
@@ -159,7 +175,7 @@ func parseDockerViewArgs(args []string) ([]string, dockerViewOptions, error) {
 			options.json = true
 		case "--":
 			forwarded = append(forwarded, args[index+1:]...)
-			return forwarded, options, nil
+			index = len(args)
 		default:
 			forwarded = append(forwarded, arg)
 		}

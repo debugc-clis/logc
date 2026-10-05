@@ -36,3 +36,21 @@ func TestParseDockerViewArgsKeepsDockerOptions(t *testing.T) {
 		t.Fatalf("options=%#v", options)
 	}
 }
+
+func TestParseDockerViewArgsRejectsEmptyContainerAfterSeparator(t *testing.T) {
+	for _, args := range [][]string{{"--"}, {"-m", "ERROR", "--"}} {
+		if _, _, err := parseDockerViewArgs(args); err == nil {
+			t.Fatalf("accepted arguments without a container: %v", args)
+		}
+	}
+}
+
+func TestParseDockerViewArgsPreservesContainerAfterSeparator(t *testing.T) {
+	forwarded, _, err := parseDockerViewArgs([]string{"--", "api"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(forwarded, []string{"api"}) {
+		t.Fatalf("forwarded=%#v", forwarded)
+	}
+}

@@ -549,6 +549,9 @@ func (f *follower) pollOpenState(path string, state *fileState) error {
 	}
 	state.MissingSince = time.Time{}
 	if state.Info != nil && !os.SameFile(state.Info, pathInfo) {
+		if state.Offset < state.Info.Size() {
+			return nil
+		}
 		return f.replaceOpenFile(state)
 	}
 	return nil

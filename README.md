@@ -350,9 +350,11 @@ Because logrotate configuration may include unreadable files or shell-expanded r
 - **Safe roots:** recursive discovery refuses filesystem-root scans.
 - **Long-running follow:** active files are polled and discovery is refreshed without retaining full log history in memory.
 - **Rotation handling:** truncation and inode replacement reopen the active source; rotated and gzip files remain searchable.
+- **Rotation backlog:** normal follow and `watch` drain the old file in bounded reads before switching to its replacement, including backlogs larger than 4 MiB.
 - **Open-file control:** follow mode limits active descriptors and falls back to polling where needed.
 - **Terminal safety:** untrusted control characters are sanitized before terminal rendering.
 - **Backpressure:** a slow output consumer can delay refreshes because stdout and stderr writes remain synchronous.
+- **External streams:** Docker, system, and systemd watch streams reject individual lines larger than 2 MiB, stop the producer, and report an error instead of waiting indefinitely.
 - **JSON mode:** paths and message text are preserved for downstream tools.
 
 ## Troubleshooting Recipes

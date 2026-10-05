@@ -339,6 +339,18 @@ func (w *alertWatcher) pollOpenState(path string, state *fileState) error {
 	if state.Info == nil || os.SameFile(state.Info, pathInfo) {
 		return nil
 	}
+	if state.Offset < state.Info.Size() {
+		return nil
+	}
+	next, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	nextInfo, err := next.Stat()
+	if err != nil {
+		_ = next.Close()
+		return err
+	}
 
 	if state.Carry != "" {
 		line := state.Carry
@@ -347,12 +359,8 @@ func (w *alertWatcher) pollOpenState(path string, state *fileState) error {
 		}
 		w.observe(path, []string{line}, time.Now(), state.Info.ModTime())
 	}
-	next, err := os.Open(path)
-	if err != nil {
-		return err
-	}
 	previous := state.File
-	state.File, state.Info, state.Offset = next, pathInfo, 0
+	state.File, state.Info, state.Offset = next, nextInfo, 0
 	state.Carry, state.CarryTruncated = "", false
 	if previous != nil {
 		_ = previous.Close()
@@ -611,6 +619,10 @@ func runJournalAlertWatch(ctx context.Context, unit string, cfg Config, query Qu
 	if err != nil {
 		return err
 	}
+	return runJournalAlertCommand(ctx, command, "systemd:"+unit, cfg, query, out, color, clear, fullLines)
+}
+
+func runJournalAlertCommand(ctx context.Context, command *exec.Cmd, source string, cfg Config, query Query, out io.Writer, color, clear, fullLines bool) error {
 	pipe, err := command.StdoutPipe()
 	if err != nil {
 		return err
@@ -620,7 +632,6 @@ func runJournalAlertWatch(ctx context.Context, unit string, cfg Config, query Qu
 		return err
 	}
 
-	source := "systemd:" + unit
 	watcher := newAlertWatcher(cfg, nil, nil, nil, query)
 	watcher.fullLines = fullLines
 	watcher.states[source] = &fileState{Path: source}
@@ -643,6 +654,12 @@ func runJournalAlertWatch(ctx context.Context, unit string, cfg Config, query Qu
 			observedAt := time.Now()
 			watcher.observe(source, []string{line}, observedAt, observedAt)
 		case runErr := <-done:
+			if lines != nil {
+				for line := range lines {
+					observedAt := time.Now()
+					watcher.observe(source, []string{line}, observedAt, observedAt)
+				}
+			}
 			watcher.render(out, color, clear)
 			return runErr
 		case <-renderTicker.C:
@@ -658,6 +675,7 @@ func scanCommandLines(ctx context.Context, reader io.Reader, command *exec.Cmd, 
 		select {
 		case lines <- strings.TrimSuffix(scanner.Text(), "\r"):
 		case <-ctx.Done():
+			stopLogCommand(command, reader)
 			_ = command.Wait()
 			close(lines)
 			done <- ctx.Err()
@@ -666,6 +684,7 @@ func scanCommandLines(ctx context.Context, reader io.Reader, command *exec.Cmd, 
 	}
 	close(lines)
 	if err := scanner.Err(); err != nil {
+		stopLogCommand(command, reader)
 		_ = command.Wait()
 		done <- err
 		return
