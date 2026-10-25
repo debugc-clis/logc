@@ -101,6 +101,31 @@ Plain `logc` is a follow command: it prints the latest 10 lines from up to 20 re
 
 Stop any follow or watch command with `Ctrl+C`.
 
+## Recent Improvements
+
+- **More reliable log rotation:** plain `logc` and `logc watch` drain unread data from the old file before switching to its replacement, including backlogs larger than 4 MiB. This applies to sources followed with an open file descriptor.
+- **Complete final watch counts:** systemd watch processes already-read, buffered events before rendering its final view when the journal command exits.
+- **External-stream error handling:** oversized lines in Docker, system, and systemd watch streams now stop the log-reading subprocess and return an error instead of hanging. This stops the local reader, not the container or service.
+- **Distribution-aware system logs:** when journald is unavailable on Linux, `logc system` can follow traditional system-log files selected for the detected distribution. Override these with `system_log` in `~/.logc.conf`.
+- **Scriptable source inspection:** `logc ls --json` and `logc where TARGET --json` expose source metadata and logrotate status for other tools.
+
+Try these workflows:
+
+```bash
+# Aggregate live application logs, following file replacement and truncation
+logc
+
+# Watch repeated API errors while logs rotate
+logc watch ERROR api --since 30m
+
+# Follow Docker errors with logc filtering and duplicate suppression
+logc docker --tail 100 -m ERROR --dedup api
+
+# Export discovered sources and resolved file paths
+logc ls --json
+logc where api --json
+```
+
 ## Choose a Command
 
 | Goal | Command |
@@ -228,6 +253,15 @@ logc docker --details api
 ```
 
 `logc docker [docker logs options] CONTAINER` preserves Docker's logging behavior while keeping the command under the same `logc` workflow. The container name or ID is passed directly to `docker logs`.
+
+Docker logs can also use logc's filtering, context, deduplication, colors, and JSON output:
+
+```bash
+logc docker --since 30m -m ERROR -C 2 api
+logc docker --tail 100 -m ERROR --dedup --json api
+```
+
+Follow mode is enabled by default. A container name or ID is required; `logc docker --` reports a usage error rather than starting a stream.
 
 ### 7. Inspect discovered sources
 
@@ -414,6 +448,8 @@ Contributions are welcome.
 5. Open a pull request describing the operational problem and the chosen behavior.
 
 Please keep `logc` local-first, read-only, scriptable, and predictable.
+
+The project follows a recurring PM, Staff Go engineering, and independent review workflow. Each cycle prioritizes concrete SRE scenarios, implements and tests focused changes, and updates this README and relevant landing-page examples before publishing. See the [iteration playbook](docs/ITERATION_PLAYBOOK.md) and [iteration log and backlog](docs/ITERATION_LOG.md) for the process, verified work, and next priorities. Planned items are not advertised as shipped features.
 
 ## AI and Liability Notice
 
