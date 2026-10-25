@@ -54,7 +54,7 @@ Or build from a checkout:
 git clone https://github.com/debugc-clis/logc.git
 cd logc
 make build
-sudo install -m 0755 ./logc /usr/local/bin/logc
+sudo install -m 0755 ./bin/logc /usr/local/bin/logc
 logc version
 ```
 
@@ -62,7 +62,7 @@ For a user-local installation:
 
 ```bash
 mkdir -p ~/.local/bin
-install -m 0755 ./logc ~/.local/bin/logc
+install -m 0755 ./bin/logc ~/.local/bin/logc
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
