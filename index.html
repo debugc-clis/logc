@@ -157,7 +157,8 @@
 
     /* hero */
     .hero{padding:60px 0 42px;min-height:0;display:grid;align-items:center}
-    .hero-grid{display:grid;grid-template-columns:.84fr 1.16fr;gap:52px;align-items:center}
+    .hero-grid{display:grid;grid-template-columns:minmax(0,.84fr) minmax(0,1.16fr);gap:52px;align-items:center}
+    .hero-copy{min-width:0}
     h1{
       font-size:clamp(46px,6.3vw,70px);
       line-height:1.03;letter-spacing:-.052em;margin:12px 0 22px;padding-bottom:.12em;font-weight:780;
@@ -390,7 +391,7 @@
     /* responsive */
     @media (max-width:980px){
       .nav-links{display:none}
-      .hero-grid{grid-template-columns:1fr}
+      .hero-grid{grid-template-columns:minmax(0,1fr)}
       .hero{padding-top:50px;min-height:0}
       .feature-grid{grid-template-columns:repeat(2,1fr)}
       .examples-grid{grid-template-columns:repeat(2,1fr)}
@@ -656,9 +657,9 @@ $ tail -f app.log | grep ERROR</pre>
             </div>
           </article>
 
-          <article class="card example-card">
+          <article class="card example-card" id="search-follow">
             <div class="example-label"><span class="badge">05</span><span><span class="example-syntax">logc TARGET REGEX -f</span> — search, then follow</span></div>
-            <p class="example-when">Use when an incident began recently and you want historical context plus new matching events.</p>
+            <p class="example-when">Use when an incident began recently and you want historical context plus new matching events. Directory, quoted glob, and configured-group targets also discover new matching active files on rescan.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc api 'timeout|reset' --since 30m -f
 
@@ -669,6 +670,11 @@ $ tail -f app.log | grep ERROR</pre>
 13:49:11 <span class="err">ERROR</span> upstream timeout after 30s
 <span class="ok">-- following matching lines --</span>
 13:50:02 <span class="warn">WARN</span> connection reset by peer
+
+<span class="dim">Follow a directory as deployments create new log filenames:</span>
+<span class="prompt">$</span> logc /srv/api/log ERROR --since 30m -f
+<span class="dim">Requires an active file at startup. New active files join on rescan;
+subsequent matching lines are streamed. Archives stay search-only.</span>
 </pre>
             </div>
           </article>

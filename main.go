@@ -369,10 +369,7 @@ func realMain() int {
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		fq := q
-		fq.Since = time.Time{}
-		f := newFollower(cfg, activePaths, excludes, out, fq, true)
-		f.defaultDiscovery = resolved.DefaultDiscovery
+		f := newSearchFollower(cfg, resolved, activePaths, excludes, out, q)
 		f.categories, f.modules = opts.Categories, opts.Modules
 		f.run(ctx)
 		return 0
@@ -399,6 +396,26 @@ func realMain() int {
 
 func shouldFollow(opts cliOptions) bool {
 	return !opts.FollowSet || opts.Follow
+}
+
+func newSearchFollower(cfg Config, resolved ResolvedTarget, activePaths, excludes []string, out *printer, q Query) *follower {
+	var patterns []string
+	for _, pattern := range resolved.Patterns {
+		if !hasMeta(pattern) && historicalLog(pattern) {
+			info, err := os.Stat(expandHome(pattern))
+			if err != nil || !info.IsDir() {
+				continue
+			}
+		}
+		patterns = append(patterns, pattern)
+	}
+	if len(patterns) == 0 {
+		patterns = activePaths
+	}
+	q.Since = time.Time{}
+	f := newFollower(cfg, patterns, excludes, out, q, true)
+	f.defaultDiscovery = resolved.DefaultDiscovery
+	return f
 }
 
 func interpretPositionals(cfg Config, pos []string, explicitMatch string, includeHistory bool, cutoff time.Time) (ResolvedTarget, string, error) {

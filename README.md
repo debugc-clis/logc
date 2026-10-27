@@ -103,6 +103,7 @@ Stop any follow or watch command with `Ctrl+C`.
 
 ## Recent Improvements
 
+- **Search-follow keeps discovering files:** directory, quoted glob, and configured-group targets retain their discovery scope after the initial search. Newly created matching active files can join on the next rescan; explicit single-file targets stay limited to that file.
 - **More reliable log rotation:** plain `logc` and `logc watch` drain unread data from the old file before switching to its replacement, including backlogs larger than 4 MiB. This applies to sources followed with an open file descriptor.
 - **Complete final watch counts:** systemd watch processes already-read, buffered events before rendering its final view when the journal command exits.
 - **External-stream error handling:** oversized lines in Docker, system, and systemd watch streams now stop the log-reading subprocess and return an error instead of hanging. This stops the local reader, not the container or service.
@@ -205,6 +206,15 @@ logc api 'timeout|reset' --since 30m -f
 ```
 
 This is useful when you need immediate context before waiting for the next occurrence.
+
+To keep watching a log directory across deployments that create new filenames:
+
+```bash
+logc /srv/api/log ERROR --since 30m -f
+logc '/srv/api/log/*.log' ERROR --since 30m -f
+```
+
+Directory, glob, and configured-group targets keep their original selectors during follow. New matching active files join on a rescan (`scan_interval=5s` by default), and subsequent matching lines appear in the stream. Rotated and gzip logs are searched for initial context but are not added as live sources. At least one active file must exist when follow starts. An explicit target such as `/srv/api/log/app.log` follows only that file and its replacement, not other filenames in the directory.
 
 ### 4. Watch live alerts
 
