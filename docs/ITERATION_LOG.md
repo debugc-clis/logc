@@ -113,9 +113,19 @@ formatting checks and `git diff --check` passed locally on macOS. Independent
 QA's related rotation/discovery/stream regressions also passed under race
 testing. These results do not substitute for the remote Linux/macOS CI matrix.
 
-This entry accompanies the implementation commit. Push, remote CI and live
-website confirmation are checked after committing and reported separately by
-the scheduled run; no new deployment success is assumed here.
+Implementation commit `29f6f18` was pushed to origin/main. Its complete
+Linux/macOS, Go 1.22/stable CI matrix passed:
+https://github.com/debugc-clis/logc/actions/runs/40479154760.
+The owner's original clean main checkout was fast-forwarded to that revision.
+
+Live website confirmation is blocked by TLS configuration: `https://logc.com/`
+resolved to `66.96.149.22` and presented a certificate with subject
+`CN=*.bizland.com`; hostname verification failed with curl error 60. No TLS check
+was bypassed, and no DNS, certificate or hosting configuration was changed.
+The owner needs to verify the intended public domain and its existing hosting
+binding/certificate. Page source changes are pushed; a successful live website
+deployment is not confirmed. This evidence-only follow-up records remote
+results separately from the implementation's local verification.
 
 ### Remaining priorities
 
