@@ -247,7 +247,7 @@ func (w *alertWatcher) rescan(observeInitial bool) {
 	var warnings []string
 	var err error
 	if w.defaultDiscovery {
-		paths, warnings, err = discoverDefaultDetailed(w.cfg)
+		paths, warnings, err = discoverDefaultDetailed(w.cfg, sourceFilter{categories: w.categories, modules: w.modules})
 	} else {
 		paths, err = resolvePatterns(w.patterns, w.excludes)
 	}
@@ -261,7 +261,7 @@ func (w *alertWatcher) rescan(observeInitial bool) {
 	}
 	w.clearFailure("log source scan")
 	if w.defaultDiscovery {
-		paths = retainExistingPaths(paths, w.states, w.cfg)
+		paths = retainExistingPaths(paths, w.states, w.cfg, sourceFilter{categories: w.categories, modules: w.modules})
 	}
 	for _, path := range paths {
 		w.addPath(path, observeInitial)
@@ -514,7 +514,8 @@ func watchCommand(args []string) int {
 		fmt.Fprintln(os.Stderr, "logc watch: --all is not supported; use an explicit --since window")
 		return 2
 	}
-	resolved, pattern, err := resolveWatchArgs(cfg, opts.Positionals, opts.Match)
+	filters := sourceFilter{categories: opts.Categories, modules: opts.Modules}
+	resolved, pattern, err := resolveWatchArgsWithHistory(cfg, opts.Positionals, opts.Match, false, time.Time{}, filters)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "logc watch:", err)
 		return 2
@@ -551,7 +552,7 @@ func watchCommand(args []string) int {
 	}
 	var bootstrapPaths []string
 	if !since.IsZero() {
-		historical, _, historyErr := resolveWatchArgsWithHistory(cfg, opts.Positionals, opts.Match, true, since)
+		historical, _, historyErr := resolveWatchArgsWithHistory(cfg, opts.Positionals, opts.Match, true, since, filters)
 		if historyErr != nil {
 			fmt.Fprintln(os.Stderr, "logc watch:", historyErr)
 			return 2
@@ -570,9 +571,9 @@ func resolveWatchArgs(cfg Config, positionals []string, explicitMatch string) (R
 	return resolveWatchArgsWithHistory(cfg, positionals, explicitMatch, false, time.Time{})
 }
 
-func resolveWatchArgsWithHistory(cfg Config, positionals []string, explicitMatch string, includeHistory bool, cutoff time.Time) (ResolvedTarget, string, error) {
+func resolveWatchArgsWithHistory(cfg Config, positionals []string, explicitMatch string, includeHistory bool, cutoff time.Time, filters ...sourceFilter) (ResolvedTarget, string, error) {
 	if explicitMatch != "" {
-		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals, includeHistory, cutoff)
+		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals, includeHistory, cutoff, filters...)
 		return resolved, explicitMatch, err
 	}
 	if len(positionals) == 0 {
@@ -582,13 +583,13 @@ func resolveWatchArgsWithHistory(cfg Config, positionals []string, explicitMatch
 	// Keep the original TARGET REGEX form working for existing users. The new
 	// preferred form puts the regex first so it can accept any number of targets.
 	if len(positionals) == 2 && !looksLikeSearchExpression(positionals[0]) && looksLikeSearchExpression(positionals[1]) {
-		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[:1], includeHistory, cutoff)
+		resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[:1], includeHistory, cutoff, filters...)
 		if err == nil {
 			return resolved, positionals[1], nil
 		}
 	}
 
-	resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[1:], includeHistory, cutoff)
+	resolved, err := resolveWatchTargetsWithHistory(cfg, positionals[1:], includeHistory, cutoff, filters...)
 	if err != nil {
 		return ResolvedTarget{}, "", err
 	}
@@ -599,10 +600,10 @@ func resolveWatchTargets(cfg Config, rawTargets []string) (ResolvedTarget, error
 	return resolveWatchTargetsWithHistory(cfg, rawTargets, false, time.Time{})
 }
 
-func resolveWatchTargetsWithHistory(cfg Config, rawTargets []string, includeHistory bool, cutoff time.Time) (ResolvedTarget, error) {
+func resolveWatchTargetsWithHistory(cfg Config, rawTargets []string, includeHistory bool, cutoff time.Time, filters ...sourceFilter) (ResolvedTarget, error) {
 	targets := splitWatchTargets(rawTargets)
 	if len(targets) == 0 {
-		return resolveDefaultTarget(cfg, includeHistory, cutoff)
+		return resolveDefaultTarget(cfg, includeHistory, cutoff, filters...)
 	}
 	resolved, consumed, err := resolveLeadingTargets(cfg, targets, includeHistory)
 	if err != nil {

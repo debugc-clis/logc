@@ -291,7 +291,8 @@ func realMain() int {
 	}
 
 	// First resolve only active logs so ordinary `logc api` never pulls rotated/.gz files.
-	resolved, queryPattern, err := interpretPositionals(cfg, opts.Positionals, opts.Match, false, since)
+	filters := sourceFilter{categories: opts.Categories, modules: opts.Modules}
+	resolved, queryPattern, err := interpretPositionals(cfg, opts.Positionals, opts.Match, false, since, filters)
 	if err != nil {
 		out.errorf("%v", err)
 		return 1
@@ -308,7 +309,7 @@ func realMain() int {
 	}
 	// Searches/time-range queries automatically include rotated and .gz logs unless --current is used.
 	if !opts.CurrentOnly && (queryPattern != "" || !since.IsZero()) {
-		if rr, qq, e := interpretPositionals(cfg, opts.Positionals, opts.Match, true, since); e == nil {
+		if rr, qq, e := interpretPositionals(cfg, opts.Positionals, opts.Match, true, since, filters); e == nil {
 			resolved = rr
 			if qq != "" {
 				queryPattern = severityPattern(qq)
@@ -418,10 +419,10 @@ func newSearchFollower(cfg Config, resolved ResolvedTarget, activePaths, exclude
 	return f
 }
 
-func interpretPositionals(cfg Config, pos []string, explicitMatch string, includeHistory bool, cutoff time.Time) (ResolvedTarget, string, error) {
+func interpretPositionals(cfg Config, pos []string, explicitMatch string, includeHistory bool, cutoff time.Time, filters ...sourceFilter) (ResolvedTarget, string, error) {
 	if explicitMatch != "" {
 		if len(pos) == 0 {
-			r, err := resolveDefaultTarget(cfg, includeHistory, cutoff)
+			r, err := resolveDefaultTarget(cfg, includeHistory, cutoff, filters...)
 			return r, explicitMatch, err
 		}
 		r, _, err := resolveLeadingTargets(cfg, pos, includeHistory)
@@ -431,11 +432,11 @@ func interpretPositionals(cfg Config, pos []string, explicitMatch string, includ
 		return r, explicitMatch, nil
 	}
 	if len(pos) == 0 {
-		r, err := resolveDefaultTarget(cfg, includeHistory, cutoff)
+		r, err := resolveDefaultTarget(cfg, includeHistory, cutoff, filters...)
 		return r, "", err
 	}
 	if len(pos) == 1 && looksLikeSearchExpression(pos[0]) {
-		r, err := resolveDefaultTarget(cfg, includeHistory, cutoff)
+		r, err := resolveDefaultTarget(cfg, includeHistory, cutoff, filters...)
 		return r, pos[0], err
 	}
 	// A search-looking token after one or more sources wins over fuzzy source discovery.
@@ -462,7 +463,7 @@ func interpretPositionals(cfg Config, pos []string, explicitMatch string, includ
 	}
 
 	// Nothing looked like a source: make the whole expression a search over default logs.
-	r, e := resolveDefaultTarget(cfg, true, cutoff)
+	r, e := resolveDefaultTarget(cfg, true, cutoff, filters...)
 	if e != nil {
 		return ResolvedTarget{}, "", e
 	}

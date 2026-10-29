@@ -593,7 +593,7 @@ $ tail -f app.log | grep ERROR</pre>
         <div class="examples-grid">
           <article class="card example-card">
             <div class="example-label"><span class="badge">01</span><span><span class="example-syntax">logc</span> — discover and follow</span></div>
-            <p class="example-when">Use when you have just opened an unfamiliar host and need an immediate overview.</p>
+            <p class="example-when">Use when you have just opened an unfamiliar host and need an immediate overview. To focus on database logs, use <code>logc --category database</code>. Category and module filters apply before the default file limit, so unrelated services do not consume your selected slots.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc
 
@@ -801,7 +801,7 @@ USAGE
             <div class="option-item"><code>--no-color</code><span>Disable severity and source colors.</span></div>
             <div class="option-item"><code>--json</code><span>Emit one JSON object per log block.</span></div>
             <div class="option-item"><code>--current</code><span>Skip rotated and gzip-compressed history.</span></div>
-            <div class="option-item"><code>--category LIST</code><span>Filter app, web, network, database, container, or custom sources.</span></div>
+            <div class="option-item"><code>--category LIST</code><span>Filter app, web, network, database, container, or custom sources before default file selection.</span></div>
             <div class="option-item"><code>--module LIST</code><span>Filter configured source modules.</span></div>
             <div class="option-item"><code>--full</code><span>Do not truncate long rows in logc watch.</span></div>
             <div class="option-item"><code>-m REGEX</code><span>Provide an explicit match expression when positional input is ambiguous.</span></div>

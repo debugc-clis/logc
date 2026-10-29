@@ -24,6 +24,11 @@ type ResolvedTarget struct {
 	DefaultDiscovery bool
 }
 
+type sourceFilter struct {
+	categories []string
+	modules    []string
+}
+
 const selectorCommandTimeout = 2 * time.Second
 
 func selectorOutput(path string, args ...string) ([]byte, error) {
@@ -109,9 +114,9 @@ func resolveTarget(cfg Config, raw string, includeHistory bool) (ResolvedTarget,
 	return ResolvedTarget{}, fmt.Errorf("no log source matched %q", raw)
 }
 
-func resolveDefaultTarget(cfg Config, includeHistory bool, cutoff time.Time) (ResolvedTarget, error) {
+func resolveDefaultTarget(cfg Config, includeHistory bool, cutoff time.Time, filters ...sourceFilter) (ResolvedTarget, error) {
 	if includeHistory {
-		result := collectLogCandidatesDetailed(cfg.DefaultLogDirs, cfg.Excludes, cutoff, true)
+		result := collectFilteredLogCandidates(cfg, cutoff, true, filters...)
 		candidates := result.Candidates
 		warnings := result.Warnings
 		if !cutoff.IsZero() {
@@ -130,7 +135,7 @@ func resolveDefaultTarget(cfg Config, includeHistory bool, cutoff time.Time) (Re
 		}
 		return ResolvedTarget{Name: "default", Paths: paths, Patterns: cfg.DefaultLogDirs, Warnings: warnings, DefaultDiscovery: true}, nil
 	}
-	paths, warnings, err := discoverDefaultDetailed(cfg)
+	paths, warnings, err := discoverDefaultDetailed(cfg, filters...)
 	return ResolvedTarget{Name: "default", Paths: paths, Patterns: cfg.DefaultLogDirs, Warnings: warnings, DefaultDiscovery: true}, err
 }
 
@@ -442,20 +447,24 @@ func filterSourcePaths(cfg Config, paths, categories, modules []string) []string
 	if len(categories) == 0 && len(modules) == 0 {
 		return paths
 	}
-	wantedCategories := stringSet(categories)
-	wantedModules := stringSet(modules)
+	matches := (sourceFilter{categories: categories, modules: modules}).matcher(cfg)
 	filtered := make([]string, 0, len(paths))
 	for _, path := range paths {
-		category, module := sourceMetadata(cfg, path)
-		if len(wantedCategories) > 0 && !wantedCategories[strings.ToLower(category)] {
-			continue
+		if matches(path) {
+			filtered = append(filtered, path)
 		}
-		if len(wantedModules) > 0 && !wantedModules[strings.ToLower(module)] {
-			continue
-		}
-		filtered = append(filtered, path)
 	}
 	return filtered
+}
+
+func (filter sourceFilter) matcher(cfg Config) func(string) bool {
+	wantedCategories := stringSet(filter.categories)
+	wantedModules := stringSet(filter.modules)
+	return func(path string) bool {
+		category, module := sourceMetadata(cfg, path)
+		return (len(wantedCategories) == 0 || wantedCategories[strings.ToLower(category)]) &&
+			(len(wantedModules) == 0 || wantedModules[strings.ToLower(module)])
+	}
 }
 
 func stringSet(values []string) map[string]bool {

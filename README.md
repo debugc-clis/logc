@@ -103,6 +103,7 @@ Stop any follow or watch command with `Ctrl+C`.
 
 ## Recent Improvements
 
+- **Source filters get their own discovery slots:** default discovery applies `--category` and `--module` before selecting files. Busy unrelated services no longer consume the file limit for a filtered stream, recent search, or watch view.
 - **Search-follow keeps discovering files:** directory, quoted glob, and configured-group targets retain their discovery scope after the initial search. Newly created matching active files can join on the next rescan; explicit single-file targets stay limited to that file.
 - **More reliable log rotation:** plain `logc` and `logc watch` drain unread data from the old file before switching to its replacement, including backlogs larger than 4 MiB. This applies to sources followed with an open file descriptor.
 - **Complete final watch counts:** systemd watch processes already-read, buffered events before rendering its final view when the journal command exits.
@@ -132,6 +133,7 @@ logc where api --json
 | Goal | Command |
 | --- | --- |
 | See what is happening on the machine now | `logc` |
+| Focus the default live stream on database logs | `logc --category database` |
 | Follow one application or module | `logc api` |
 | Search recent matching logs | `logc api ERROR --since 30m` |
 | Search and continue following | `logc api 'timeout|reset' --since 30m -f` |
@@ -169,6 +171,16 @@ logc /srv/payment/log
 logc 1234
 logc :8080
 ```
+
+If you know the type of service but not its log paths, filter default discovery:
+
+```bash
+logc --category database
+logc ERROR --category database --since 30m
+logc watch ERROR --category database
+```
+
+Category and module filters are applied before the default file-selection limit, including recent historical searches and follow/watch rescans. For example, with `max_files=2`, two eligible database logs can be selected even when many unrelated application logs are newer. Existing recency, exclusion, and file-count limits still apply. Use `--module NAME` for a configured source module; category and module filters can be combined.
 
 ### 2. Search recent logs
 

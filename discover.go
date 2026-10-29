@@ -152,8 +152,26 @@ func discoverDefault(cfg Config) ([]string, error) {
 	return paths, err
 }
 
-func discoverDefaultDetailed(cfg Config) ([]string, []string, error) {
-	result := collectLogCandidatesDetailed(cfg.DefaultLogDirs, cfg.Excludes, time.Now().Add(-cfg.Recent), false)
+func collectFilteredLogCandidates(cfg Config, cutoff time.Time, includeHistory bool, filters ...sourceFilter) discoveryResult {
+	result := collectLogCandidatesDetailed(cfg.DefaultLogDirs, cfg.Excludes, cutoff, includeHistory)
+	for _, filter := range filters {
+		if len(filter.categories) == 0 && len(filter.modules) == 0 {
+			continue
+		}
+		matches := filter.matcher(cfg)
+		eligible := make([]fileCandidate, 0, len(result.Candidates))
+		for _, candidate := range result.Candidates {
+			if matches(candidate.Path) {
+				eligible = append(eligible, candidate)
+			}
+		}
+		result.Candidates = eligible
+	}
+	return result
+}
+
+func discoverDefaultDetailed(cfg Config, filters ...sourceFilter) ([]string, []string, error) {
+	result := collectFilteredLogCandidates(cfg, time.Now().Add(-cfg.Recent), false, filters...)
 	cs := selectFairCandidates(result.Candidates, cfg.MaxFiles)
 	out := make([]string, 0, len(cs))
 	for _, c := range cs {

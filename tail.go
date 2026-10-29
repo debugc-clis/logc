@@ -286,7 +286,7 @@ func (f *follower) addPath(path string, announce bool) {
 	}
 }
 
-func retainExistingPaths(paths []string, states map[string]*fileState, cfg Config) []string {
+func retainExistingPaths(paths []string, states map[string]*fileState, cfg Config, filters ...sourceFilter) []string {
 	limit := cfg.MaxFiles
 	if limit <= 0 || len(paths) >= limit {
 		return paths
@@ -298,6 +298,9 @@ func retainExistingPaths(paths []string, states map[string]*fileState, cfg Confi
 	existing := make([]string, 0, len(states))
 	for path := range states {
 		existing = append(existing, path)
+	}
+	for _, filter := range filters {
+		existing = filterSourcePaths(cfg, existing, filter.categories, filter.modules)
 	}
 	sort.Strings(existing)
 	now := time.Now()
@@ -331,7 +334,7 @@ func (f *follower) rescan() {
 	}
 	f.clearFailure("log source scan")
 	if f.defaultDiscovery {
-		paths = retainExistingPaths(paths, f.states, f.cfg)
+		paths = retainExistingPaths(paths, f.states, f.cfg, sourceFilter{categories: f.categories, modules: f.modules})
 	}
 	for _, p := range paths {
 		f.addPath(p, true)
@@ -352,8 +355,7 @@ func (f *follower) rescan() {
 
 func (f *follower) resolvePaths() ([]string, []string, error) {
 	if f.defaultDiscovery {
-		paths, warnings, err := discoverDefaultDetailed(f.cfg)
-		return filterSourcePaths(f.cfg, paths, f.categories, f.modules), warnings, err
+		return discoverDefaultDetailed(f.cfg, sourceFilter{categories: f.categories, modules: f.modules})
 	}
 	paths, err := resolvePatterns(f.patterns, f.excludes)
 	return filterSourcePaths(f.cfg, paths, f.categories, f.modules), nil, err

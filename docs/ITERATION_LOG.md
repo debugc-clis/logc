@@ -134,3 +134,71 @@ results separately from the implementation's local verification.
 3. Add copytruncate/partial-carry and explicit subprocess-cancellation coverage.
 4. Continue Homebrew packaging work from issue #2 when install validation can be
    completed; keep the current under-construction notice until then.
+
+## 2026-10-29 — Reserve discovery capacity for matching sources
+
+### PM selection and reproduction
+
+Selected category/module starvation during default discovery. During a database
+incident, newer unrelated application logs could consume every discovery slot
+before `--category database` or `--module billing` was applied. Operators could
+see an empty filtered stream even though eligible, recent logs existed.
+
+The starting checkout was clean at `89f4100`, matched origin/main and had passing
+CI. No open PRs were listed; Homebrew issue #2 remains open. Changes were made in
+an isolated temporary clone because the owner's checkout was read-only to the
+sandbox. PM and engineering responsibilities were delegated separately, with an
+independent QA agent reviewing the implementation.
+
+Coordinator reproduced the problem using the pre-change binary, `max_files=2`,
+twelve newer application directories and two older-but-recent database sources.
+All twelve CLI cases failed to show the eligible sources: category-only,
+module-only and combined filters, each exercised through ordinary follow,
+recent search, watch, and watch with `--since`.
+
+### Changes
+
+- Apply source eligibility before existing fair selection in default active
+  discovery and bounded recent historical search. The active `max_files` limit
+  and recent-search `5 * max_files` budget are unchanged.
+- Propagate filters through the actual CLI resolution and watch history
+  bootstrap. Follow/watch rescans use the same eligible candidate set.
+- Evaluate quiet retained sources against filters before they consume remaining
+  capacity. Keep existing recency/exclusion rules, fresh-source precedence and
+  missing-path grace; do not reattach ineligible quiet sources.
+- Count eligible candidates when issuing recent-search truncation warnings.
+  Preserve filter list semantics and unlimited `--all` behavior.
+- Update README and the landing page with `logc --category database` and explain
+  why unrelated services no longer consume filtered discovery slots. Homebrew
+  stays marked under construction.
+
+### Validation evidence
+
+- The same twelve coordinator CLI scenarios passed with the updated binary.
+  Search/watch bootstrap included eligible rotated history; unrelated app lines
+  stayed absent. Follow/watch discovered a new eligible file on rescan, watch
+  source counts stayed within two, and streaming processes exited on SIGTERM.
+- Go regressions cover category/module combinations, list/case semantics,
+  default resolution and option propagation, eligible historical budgets and
+  warnings, follow/watch discovery and exactly-once appends, watch bootstrap,
+  quiet-file retention and unchanged unfiltered behavior.
+- The final full local `go test -race ./...`, vet, a temporary-path build,
+  formatting verification and `git diff --check` passed on macOS. The engineer's
+  filtered regressions passed ten race repetitions, and independent QA approved
+  the final tree after a fresh targeted race run covering filtering, historical
+  discovery, follow/watch and the previous search-follow fix. Remote Linux/macOS
+  CI is checked separately after pushing.
+- Local browser checks passed at desktop 1280 px and mobile 390 px in light and
+  dark modes. The expanded command description remained readable, page widths
+  matched the viewports and internal navigation anchors resolved correctly.
+- The existing `https://logc.com/` TLS hostname mismatch was rechecked and is
+  unchanged (curl error 60). No TLS bypass, DNS or hosting changes were made;
+  live deployment is not confirmed by these source updates.
+
+### Publication and next work
+
+This entry accompanies the implementation; the scheduled run reports its
+verified commit/push/CI outcome after publication. Remaining product priorities
+are deterministic overlapping-group precedence, copytruncate/partial-carry and
+explicit subprocess-cancellation regressions, and validated Homebrew packaging.
+The previously reported live-domain TLS issue remains an external blocker.
