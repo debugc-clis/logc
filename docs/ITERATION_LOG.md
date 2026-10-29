@@ -197,8 +197,14 @@ recent search, watch, and watch with `--since`.
 
 ### Publication and next work
 
-This entry accompanies the implementation; the scheduled run reports its
-verified commit/push/CI outcome after publication. Remaining product priorities
-are deterministic overlapping-group precedence, copytruncate/partial-carry and
-explicit subprocess-cancellation regressions, and validated Homebrew packaging.
-The previously reported live-domain TLS issue remains an external blocker.
+Implementation commit `ba802aa` was pushed normally to origin/main. All four
+Linux/macOS, Go 1.22/stable CI jobs passed, including race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/40847301305.
+The owner's original clean main checkout was fast-forwarded to the published
+revision. This documentation-only follow-up records the remote evidence.
+
+Remaining product priorities are deterministic overlapping-group precedence,
+copytruncate/partial-carry and explicit subprocess-cancellation regressions,
+and validated Homebrew packaging. The previously reported live-domain TLS
+issue remains an external blocker; website source changes are pushed, but a
+successful live deployment is not confirmed.
