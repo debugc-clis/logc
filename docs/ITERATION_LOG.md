@@ -208,3 +208,65 @@ copytruncate/partial-carry and explicit subprocess-cancellation regressions,
 and validated Homebrew packaging. The previously reported live-domain TLS
 issue remains an external blocker; website source changes are pushed, but a
 successful live deployment is not confirmed.
+
+## 2026-10-31 — Make overlapping source classification predictable
+
+### PM selection and reproduction
+
+Selected the next backlog item: overlapping groups could classify the same
+file differently between metadata lookups because group matching iterated a
+Go map. This could make `where --json`, emitted metadata and category/module
+filtering disagree during an incident.
+
+The starting checkout was clean at `50252b5`, matched origin/main and had
+passing CI. No open PRs were listed; Homebrew issue #2 remains open. Coordinator
+used an isolated temporary clone, PM confirmed the bounded scope, a Staff Go
+engineer implemented the change, and a separate QA agent reviewed it.
+
+Coordinator reproduced the defect with 128 real `where --json` invocations.
+With two conflicting overlapping groups, one configuration order produced
+55 `database/payments` results and 9 `app/other` results; reversed declaration
+order produced 6 `database/payments` and 58 `app/other` results.
+
+### Implemented behavior
+
+- Match effective group names in ascending, case-sensitive lexical order and
+  use the first matching group for category/module metadata. Built-in groups
+  participate in the same ordering. Pattern matching itself is unchanged.
+- Preserve explicit group selection: selecting a later group still resolves
+  its own paths. Each `ls` configured-group row still describes its own settings.
+- Preserve missing category/module defaults, ungrouped classification and
+  case-insensitive category/module filters. Do not introduce specificity,
+  declaration-order priority, caching, dependencies or new flags.
+- Add a README overlap example and explain precedence in the landing-page
+  configuration guide. Homebrew remains marked under construction.
+
+### Validation evidence
+
+- The updated binary returned `database/payments` for all 128 `where --json`
+  samples across both configuration orders. All 32 real filtered searches
+  selected the expected source and emitted consistent JSON metadata.
+- Real explicit-group following retained both the overlapping and exclusive
+  file, with each file's correct metadata, then exited successfully on SIGTERM.
+  Source-list JSON retained each group's configured module and file count.
+- Regression tests cover repeated forward/reverse map insertion, uppercase
+  lexical precedence, directory/exact/glob overlaps, an earlier nonmatch,
+  `where` JSON, source filters/default discovery, explicit selectors and
+  nonoverlapping/built-in/ungrouped compatibility.
+- Final `go test -race ./...`, `go vet ./...`, temporary-path build, formatting
+  and `git diff --check` passed locally. Independent QA approved the patch after
+  a fresh targeted race run with three repetitions.
+- Static HTML parsing, unique IDs, internal anchors and new documentation text
+  passed checks. Browser surfaces were unavailable (`iab` unavailable and an
+  empty browser inventory), so desktop/mobile and light/dark rendering were
+  not visually revalidated in this cycle. Only explanatory page text changed.
+- `https://logc.com/` still fails TLS hostname verification with curl error 60.
+  No TLS bypass or DNS/hosting changes were made; live deployment is unverified.
+
+### Publication and next work
+
+This entry accompanies the implementation. The scheduled run separately
+records the published commit and remote CI result after pushing. Next priorities
+are copytruncate/partial-carry and explicit subprocess-cancellation coverage,
+then validated Homebrew packaging. The existing domain TLS issue remains an
+external deployment blocker.

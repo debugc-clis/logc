@@ -754,7 +754,7 @@ web/haproxy web      haproxy auto 3     2m     partial /var/log/haproxy
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">11</span><span><span class="example-syntax">logc config</span> — inspect configuration</span></div>
-            <p class="example-when">Use to create, locate, or inspect the effective roots, exclusions, groups, limits, and output settings.</p>
+            <p class="example-when">Use to create, locate, or inspect the effective roots, exclusions, groups, limits, and output settings. If groups overlap, the first matching group in case-sensitive alphabetical name order supplies the file's category and module; configuration order and pattern specificity do not change that precedence.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc config show
 

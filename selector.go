@@ -379,7 +379,13 @@ func sourceByID(cfg Config, id string) (sourceSummary, bool) {
 
 func groupNameForPath(cfg Config, path string) string {
 	abs, _ := filepath.Abs(path)
-	for name, patterns := range cfg.Groups {
+	names := make([]string, 0, len(cfg.Groups))
+	for name := range cfg.Groups {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		patterns := cfg.Groups[name]
 		for _, pattern := range patterns {
 			expanded := expandHome(pattern)
 			if hasMeta(expanded) && (globMatch(expanded, abs) || globMatch(expanded, path)) {

@@ -103,6 +103,7 @@ Stop any follow or watch command with `Ctrl+C`.
 
 ## Recent Improvements
 
+- **Stable classification for overlapping groups:** when several configured groups match a file, the first matching group in case-sensitive alphabetical name order supplies its category and module. Classification no longer depends on map iteration order.
 - **Source filters get their own discovery slots:** default discovery applies `--category` and `--module` before selecting files. Busy unrelated services no longer consume the file limit for a filtered stream, recent search, or watch view.
 - **Search-follow keeps discovering files:** directory, quoted glob, and configured-group targets retain their discovery scope after the initial search. Newly created matching active files can join on the next rescan; explicit single-file targets stay limited to that file.
 - **More reliable log rotation:** plain `logc` and `logc watch` drain unread data from the old file before switching to its replacement, including backlogs larger than 4 MiB. This applies to sources followed with an open file descriptor.
@@ -365,6 +366,30 @@ module=api
 ```
 
 Custom source sections use `[group.NAME]`; a bare section such as `[api]` is not interpreted as a source group.
+
+### Overlapping source groups
+
+When a file matches multiple configured groups, logc checks group names in ascending, case-sensitive alphabetical order. The first matching group supplies the file's category and module. Configuration order and pattern specificity do not change that precedence. This applies to the effective merged configuration, including built-in groups; inspect it with `logc config show`.
+
+```ini
+[group.api]
+path=/srv/api/log/*.log
+category=app
+module=api
+
+[group.platform]
+path=/srv/*/log/*.log
+category=system
+module=platform
+```
+
+In this example, `/srv/api/log/app.log` matches both groups and consistently receives `category=app` and `module=api`, because `api` sorts before `platform`. Uppercase names sort before lowercase names. Inspect the classification of an existing file with:
+
+```bash
+logc where /srv/api/log/app.log --json
+```
+
+This rule governs file metadata and category/module filters. An explicit group selector such as `logc platform` still resolves that group's own paths, and `logc ls` still lists each configured group's settings.
 
 ### Main settings
 
