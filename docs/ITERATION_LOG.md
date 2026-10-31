@@ -265,8 +265,13 @@ order produced 6 `database/payments` and 58 `app/other` results.
 
 ### Publication and next work
 
-This entry accompanies the implementation. The scheduled run separately
-records the published commit and remote CI result after pushing. Next priorities
-are copytruncate/partial-carry and explicit subprocess-cancellation coverage,
-then validated Homebrew packaging. The existing domain TLS issue remains an
-external deployment blocker.
+Implementation commit `30de72c` was pushed normally to origin/main and the
+owner's original clean main checkout was fast-forwarded to that revision.
+Its complete Linux/macOS, Go 1.22/stable CI matrix passed:
+https://github.com/debugc-clis/logc/actions/runs/41187404462.
+This documentation-only follow-up records the remote result.
+
+Next priorities are copytruncate/partial-carry and explicit subprocess-
+cancellation coverage, then validated Homebrew packaging. The existing domain
+TLS issue remains an external deployment blocker; page source is published,
+but neither a new live deployment nor visual page validation is claimed.
