@@ -645,6 +645,8 @@ func runJournalAlertCommand(ctx context.Context, command *exec.Cmd, source strin
 	for {
 		select {
 		case <-ctx.Done():
+			stopLogCommand(command, pipe)
+			<-done
 			watcher.render(out, color, clear)
 			return ctx.Err()
 		case line, ok := <-lines:
@@ -662,6 +664,9 @@ func runJournalAlertCommand(ctx context.Context, command *exec.Cmd, source strin
 				}
 			}
 			watcher.render(out, color, clear)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return runErr
 		case <-renderTicker.C:
 			watcher.render(out, color, clear)
@@ -684,13 +689,18 @@ func scanCommandLines(ctx context.Context, reader io.Reader, command *exec.Cmd, 
 		}
 	}
 	close(lines)
-	if err := scanner.Err(); err != nil {
+	scanErr := scanner.Err()
+	if scanErr != nil {
 		stopLogCommand(command, reader)
-		_ = command.Wait()
-		done <- err
-		return
 	}
-	done <- command.Wait()
+	waitErr := command.Wait()
+	if ctx.Err() != nil {
+		done <- ctx.Err()
+	} else if scanErr != nil {
+		done <- scanErr
+	} else {
+		done <- waitErr
+	}
 }
 
 func splitWatchTargets(rawTargets []string) []string {

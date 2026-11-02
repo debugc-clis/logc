@@ -275,3 +275,68 @@ Next priorities are copytruncate/partial-carry and explicit subprocess-
 cancellation coverage, then validated Homebrew packaging. The existing domain
 TLS issue remains an external deployment blocker; page source is published,
 but neither a new live deployment nor visual page validation is claimed.
+
+## 2026-11-02 — Finish journal cancellation before returning
+
+### PM scope and reproduction
+
+Selected streaming lifecycle resilience: observable same-inode copytruncate
+with a buffered partial line, plus cancellation of local external log readers.
+PM defined separate semantics for follow and watch and excluded guarantees
+about unseen truncation/regrowth, blocked output writers or process trees.
+
+The starting checkout was clean at `44ab91c`, matched origin/main and had
+passing CI. No open PRs were listed; Homebrew issue #2 remains open. Work used
+an isolated temporary clone with separate PM, Staff Go engineering and QA agents.
+
+New cancellation tests reproduced a journal-watch defect on original HEAD:
+the entry point could return before its immediate producer was reaped. A silent
+journal scanner also returned `signal: killed` instead of the context error.
+Copytruncate and Docker cancellation already passed the coordinator's baseline
+CLI checks; copytruncate coverage is a regression addition, not a new runtime fix.
+
+### Implemented changes
+
+- On journal-watch cancellation, close the local reader, stop the immediate
+  producer, and wait for the scanner worker to finish before returning.
+- Keep command `Wait` ownership in the scanner and normalize cancellation to
+  the context error, including completion/cancellation races. Normal completion
+  continues processing already-buffered journal events before its final render.
+- Add 16 copytruncate combinations: follow/watch, open descriptor/path polling,
+  observed empty truncation/shorter rewritten content, and ordinary/long carry.
+  Follow emits eligible old carry separately once; watch discards it. New
+  complete lines are observed once and carry truncation state is cleared.
+- Add live-producer readiness handshakes and cancellation/reaping coverage for
+  system, Docker, journal watch, a separately owned journal command context,
+  silent scanner reads, and scanner sends with no channel consumer.
+- README explains copytruncate's observation limits and local-process cleanup;
+  the landing page clarifies that stopping a view leaves containers/services
+  running. No new flags, dependencies or file-following logic were introduced.
+
+### Verification
+
+- Final coordinator `go test -race ./...`, vet, temporary-path build, formatting
+  and `git diff --check` passed locally on macOS. Engineering repeated new race
+  regressions 20 times; independent QA repeated them ten times and also passed
+  the full race suite and overflow/normal-buffered-exit regressions.
+- Coordinator tested real CLI follow/watch through same-inode truncation with
+  a partial-line barrier, and Docker cancellation on SIGINT and SIGTERM using
+  an isolated mock Docker producer. Baseline and updated behavior preserve
+  complete new events, reject cross-truncation joins, exit successfully and
+  leave no immediate mock Docker log-reader process after CLI exit. No real
+  containers, journal service or production logs were used.
+- Browser checks passed for the updated watch description at actual desktop
+  1280 px and emulated mobile 390 px in light/dark modes, with page widths equal
+  to their viewports and all internal anchors resolving. Screenshots were
+  inspected in tool output; saving them to the temporary artifact directory
+  was blocked by the browser tool's workspace policy and is not claimed.
+- The live `https://logc.com/` TLS hostname error remains unchanged (curl 60).
+  No bypass or DNS/hosting changes were made; live deployment is unverified.
+
+### Publication and remaining work
+
+This entry accompanies the implementation. The scheduled run records the
+published revision and remote CI result after pushing. Remaining work includes
+validated Homebrew distribution (issue #2), optional shell completions/manual
+pages and maintenance of the CI action runtimes. Existing blocking-output and
+unobserved copytruncate limitations remain documented.

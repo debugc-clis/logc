@@ -107,7 +107,7 @@ Stop any follow or watch command with `Ctrl+C`.
 - **Source filters get their own discovery slots:** default discovery applies `--category` and `--module` before selecting files. Busy unrelated services no longer consume the file limit for a filtered stream, recent search, or watch view.
 - **Search-follow keeps discovering files:** directory, quoted glob, and configured-group targets retain their discovery scope after the initial search. Newly created matching active files can join on the next rescan; explicit single-file targets stay limited to that file.
 - **More reliable log rotation:** plain `logc` and `logc watch` drain unread data from the old file before switching to its replacement, including backlogs larger than 4 MiB. This applies to sources followed with an open file descriptor.
-- **Complete final watch counts:** systemd watch processes already-read, buffered events before rendering its final view when the journal command exits.
+- **Complete counts on normal journal completion:** systemd watch processes already-read, buffered events before rendering its final view when the journal command completes normally.
 - **External-stream error handling:** oversized lines in Docker, system, and systemd watch streams now stop the log-reading subprocess and return an error instead of hanging. This stops the local reader, not the container or service.
 - **Distribution-aware system logs:** when journald is unavailable on Linux, `logc system` can follow traditional system-log files selected for the detected distribution. Override these with `system_log` in `~/.logc.conf`.
 - **Scriptable source inspection:** `logc ls --json` and `logc where TARGET --json` expose source metadata and logrotate status for other tools.
@@ -431,11 +431,13 @@ Because logrotate configuration may include unreadable files or shell-expanded r
 - **Safe roots:** recursive discovery refuses filesystem-root scans.
 - **Long-running follow:** active files are polled and discovery is refreshed without retaining full log history in memory.
 - **Rotation handling:** truncation and inode replacement reopen the active source; rotated and gzip files remain searchable.
+- **Copytruncate limits:** when polling observes a file shrink, follow/watch reset partial-line state so old fragments are not joined to new entries. If a file is truncated and grows back to the previous read offset or beyond between polls, that truncation may not be detected; unread data removed by truncation cannot be recovered.
 - **Rotation backlog:** normal follow and `watch` drain the old file in bounded reads before switching to its replacement, including backlogs larger than 4 MiB.
 - **Open-file control:** follow mode limits active descriptors and falls back to polling where needed.
 - **Terminal safety:** untrusted control characters are sanitized before terminal rendering.
 - **Backpressure:** a slow output consumer can delay refreshes because stdout and stderr writes remain synchronous.
 - **External streams:** Docker, system, and systemd watch streams reject individual lines larger than 2 MiB, stop the producer, and report an error instead of waiting indefinitely.
+- **Stopping a stream:** `Ctrl+C` or `SIGTERM` ends logc's stream and waits for its immediate local log-reading subprocess to be reaped. Containers and system services keep running. Output writes remain synchronous, so cancellation does not interrupt an indefinitely blocked stdout/stderr write.
 - **JSON mode:** paths and message text are preserved for downstream tools.
 
 ## Troubleshooting Recipes

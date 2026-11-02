@@ -681,7 +681,7 @@ subsequent matching lines are streamed. Archives stay search-only.</span>
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">06</span><span><span class="example-syntax">logc watch REGEX [TARGET...]</span></span></div>
-            <p class="example-when">Use when repeated errors scroll too quickly and you need rate, count, and timing instead of every raw line.</p>
+            <p class="example-when">Use when repeated errors scroll too quickly and you need rate, count, and timing instead of every raw line. Press Ctrl+C to stop the view and its local log reader; containers and system services keep running.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc watch ERROR api --since 30m
 
