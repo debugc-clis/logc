@@ -335,8 +335,14 @@ CLI checks; copytruncate coverage is a regression addition, not a new runtime fi
 
 ### Publication and remaining work
 
-This entry accompanies the implementation. The scheduled run records the
-published revision and remote CI result after pushing. Remaining work includes
-validated Homebrew distribution (issue #2), optional shell completions/manual
-pages and maintenance of the CI action runtimes. Existing blocking-output and
-unobserved copytruncate limitations remain documented.
+Implementation commit `8d15612` was pushed normally to origin/main and synced
+into the owner's original clean main checkout. The complete Linux/macOS,
+Go 1.22/stable CI matrix passed, including race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/41419023847.
+This documentation-only follow-up records the remote outcome.
+
+Remaining work includes validated Homebrew distribution (issue #2), optional
+shell completions/manual pages and maintenance of the CI action runtimes.
+Existing blocking-output and unobserved copytruncate limitations remain
+documented. Website source updates are published; live deployment remains
+unconfirmed because of the existing domain TLS mismatch.
