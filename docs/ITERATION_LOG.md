@@ -346,3 +346,59 @@ shell completions/manual pages and maintenance of the CI action runtimes.
 Existing blocking-output and unobserved copytruncate limitations remain
 documented. Website source updates are published; live deployment remains
 unconfirmed because of the existing domain TLS mismatch.
+
+## 2026-11-04 — Reject misleading relative search windows
+
+### PM selection and reproduction
+
+Prioritized predictable incident time windows over optional shell completion.
+An SRE typing `--since -1d` could silently get a future cutoff and no evidence,
+while `--since +Infd` or a huge day count could select unexpected history.
+The original binary accepted all eight coordinator probes (zero, negative,
+nonfinite and overflowing day/week values) with exit 0; ordinary zero/negative
+Go durations already failed validation. No customer-frequency claim is made.
+
+The original checkout was clean at `c6b7a79`, matched remote main, and had
+passing CI. Issue #2 (Homebrew) remains open and no open PRs were listed.
+An exclusive temporary lock and isolated clone avoided overlapping writes.
+Separate PM, Staff Go engineering and independent QA agents were delegated.
+
+### Changes and acceptance
+
+- Guard day/week floating-point conversions before converting to a duration:
+  require at least one nanosecond and strictly less than 2^63 nanoseconds.
+  Zero, negatives, NaN, infinities, overflow and sub-nanosecond windows now
+  produce the existing `invalid --since` error instead of a misleading cutoff.
+- Preserve positive fractional days/weeks, Go durations, `today`, local dates,
+  quoted local date-times and RFC3339 timestamps. Future absolute dates remain
+  valid. Docker's native `--since` forwarding is deliberately unchanged.
+- Add table-driven parser regressions including adjacent floating-point range
+  boundaries, underflow, accepted fractions and all supported absolute formats.
+- README and landing options explain positive windows and Docker's exception;
+  correct the README's timezone-less RFC3339 example by adding `Z`.
+  No new dependencies, flags or streaming implementation changes were made.
+
+### Verification and publication
+
+- Coordinator targeted race tests repeated ten times, full `go test -race
+  ./...`, vet, temporary-output build, gofmt and `git diff --check` passed
+  locally on macOS with Go 1.22.2.
+- Independent QA passed the full race suite, vet/build/format checks, 252
+  invalid-window CLI cases (including explicit follow, JSON and kernel system
+  views), 15 valid-input CLI cases and six stub-backed Docker passthrough cases.
+  No blocking review findings remained. Native Linux journald and real Docker
+  integrations were not exercised locally; remote CI is tracked separately.
+- Forty-three isolated actual-CLI cases passed: 36 malformed windows rejected
+  with exit 2 and empty stdout across file search, watch and system commands;
+  four positive windows selected the expected events and three absolute
+  formats retained their behavior. No production services or logs were used.
+- Browser screenshots verified the changed option at desktop 1280 px and
+  mobile 390 px in light/dark modes. Document width matched viewport width;
+  internal anchors resolved and GitHub links target debugc-clis/logc.
+- `https://logc.com/` still fails TLS hostname validation (curl error 60).
+  No TLS bypass, deployment project or production configuration was changed.
+  Website source publication does not establish a successful live deployment.
+
+Implementation publication and remote CI results will be recorded after push.
+Next priorities remain validated Homebrew packaging (issue #2), optional shell
+completion/manual pages, and CI action runtime maintenance.

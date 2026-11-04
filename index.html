@@ -792,7 +792,7 @@ USAGE
           <div class="options-heading"><span>FLAGS</span> / common options</div>
           <div class="options-grid">
             <div class="option-item"><code>-f, --follow</code><span>Keep following after a search.</span></div>
-            <div class="option-item"><code>--since VALUE</code><span>Limit history with 10m, 2h, 7d, today, or a timestamp.</span></div>
+            <div class="option-item"><code>--since VALUE</code><span>Limit history with a positive window such as 30m, 0.5d, or 1w; today and timestamps also work. Invalid relative windows return an error. Docker uses its native syntax.</span></div>
             <div class="option-item"><code>--all</code><span>Search all available history explicitly.</span></div>
             <div class="option-item"><code>-C N</code><span>Show context lines around each match.</span></div>
             <div class="option-item"><code>-i</code><span>Use case-insensitive regex matching.</span></div>

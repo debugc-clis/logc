@@ -103,6 +103,7 @@ Stop any follow or watch command with `Ctrl+C`.
 
 ## Recent Improvements
 
+- **Predictable recent windows:** relative `--since` values must be positive and fit a Go duration. Invalid day/week windows now fail with an explicit error instead of silently hiding logs or selecting unexpected history.
 - **Stable classification for overlapping groups:** when several configured groups match a file, the first matching group in case-sensitive alphabetical name order supplies its category and module. Classification no longer depends on map iteration order.
 - **Source filters get their own discovery slots:** default discovery applies `--category` and `--module` before selecting files. Busy unrelated services no longer consume the file limit for a filtered stream, recent search, or watch view.
 - **Search-follow keeps discovering files:** directory, quoted glob, and configured-group targets retain their discovery scope after the initial search. Newly created matching active files can join on the next rescan; explicit single-file targets stay limited to that file.
@@ -197,9 +198,18 @@ Searches include active logs, rotated files such as `.1`, and gzip files such as
 
 ```bash
 logc api ERROR --since 30m
-logc api ERROR --since 2026-08-08T13:00:00
+logc api ERROR --since 2026-08-08T13:00:00Z
 logc api ERROR --all
 ```
+
+Relative `--since` windows must be positive and representable (at least 1 ns and
+less than roughly 292 years). Fractional days and weeks work: `0.5d` means
+12 hours and `1.5w` means 10.5 days. Zero, negative, nonfinite and overflowing
+windows are rejected with exit code 2; use `--since 1d`, not `--since -1d`.
+`today`, local dates (`2026-08-08`), quoted local date-times
+(`"2026-08-08 13:00:00"`) and RFC3339 timestamps remain supported. These rules
+apply to file search, watch and system logs; `logc docker --since` is forwarded
+to Docker and follows Docker's own syntax.
 
 Useful output controls:
 

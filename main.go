@@ -211,14 +211,16 @@ func parseSince(raw string) (time.Time, error) {
 	// Friendlier day/week suffixes while preserving Go duration syntax.
 	if strings.HasSuffix(raw, "d") {
 		n, err := strconv.ParseFloat(strings.TrimSuffix(raw, "d"), 64)
-		if err == nil {
-			return time.Now().Add(-time.Duration(n * 24 * float64(time.Hour))), nil
+		nanoseconds := n * float64(24*time.Hour)
+		if err == nil && nanoseconds >= 1 && nanoseconds < 0x1p63 {
+			return time.Now().Add(-time.Duration(nanoseconds)), nil
 		}
 	}
 	if strings.HasSuffix(raw, "w") {
 		n, err := strconv.ParseFloat(strings.TrimSuffix(raw, "w"), 64)
-		if err == nil {
-			return time.Now().Add(-time.Duration(n * 7 * 24 * float64(time.Hour))), nil
+		nanoseconds := n * float64(7*24*time.Hour)
+		if err == nil && nanoseconds >= 1 && nanoseconds < 0x1p63 {
+			return time.Now().Add(-time.Duration(nanoseconds)), nil
 		}
 	}
 	if d, err := time.ParseDuration(raw); err == nil && d > 0 {
