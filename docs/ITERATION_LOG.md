@@ -399,6 +399,15 @@ Separate PM, Staff Go engineering and independent QA agents were delegated.
   No TLS bypass, deployment project or production configuration was changed.
   Website source publication does not establish a successful live deployment.
 
-Implementation publication and remote CI results will be recorded after push.
+Implementation is committed locally as `0569c45`. Publication is blocked:
+two SSH pushes stalled without a remote response, followed by an authenticated
+HTTPS push that also made no progress for more than a minute. Owned stalled
+connections were stopped; no force push or remote configuration change was
+used. GitHub API access works and reports push permission, but remote main
+still resolves to `c6b7a79`. Consequently no new remote CI or deployment can
+be claimed. The complete work is retained in the isolated checkout and can
+be normally pushed when the Git receive endpoint responds. The original clean
+main checkout will be fast-forwarded locally if it remains unchanged.
+
 Next priorities remain validated Homebrew packaging (issue #2), optional shell
 completion/manual pages, and CI action runtime maintenance.
