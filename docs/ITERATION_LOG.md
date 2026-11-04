@@ -399,15 +399,14 @@ Separate PM, Staff Go engineering and independent QA agents were delegated.
   No TLS bypass, deployment project or production configuration was changed.
   Website source publication does not establish a successful live deployment.
 
-Implementation is committed locally as `0569c45`. Publication is blocked:
-two SSH pushes stalled without a remote response, followed by an authenticated
-HTTPS push that also made no progress for more than a minute. Owned stalled
-connections were stopped; no force push or remote configuration change was
-used. GitHub API access works and reports push permission, but remote main
-still resolves to `c6b7a79`. Consequently no new remote CI or deployment can
-be claimed. The complete work is retained in the isolated checkout and can
-be normally pushed when the Git receive endpoint responds. The original clean
-main checkout will be fast-forwarded locally if it remains unchanged.
+Implementation commit `0569c45` was pushed normally to remote main. Two SSH
+attempts stalled and were stopped; a fallback using the existing authenticated
+HTTPS connection eventually succeeded after more than a minute, resolving the
+temporary publication blocker. No force push or remote configuration change
+was used. The original clean main checkout was fast-forwarded to the published
+implementation. Remote CI has passed both Linux jobs (Go 1.22 and stable);
+the two macOS jobs remain queued, so the full matrix is not yet claimed passed:
+https://github.com/debugc-clis/logc/actions/runs/41860392275.
 
 Next priorities remain validated Homebrew packaging (issue #2), optional shell
 completion/manual pages, and CI action runtime maintenance.
