@@ -462,6 +462,18 @@ diff checks on macOS arm64/Go 1.22.2. Coordinator isolated CLI JSON search and
 invalid-window rejection smoke tests also passed. No blocking findings remain.
 Publication and remote results are recorded below when available.
 
+Implementation commit `be8d7bf` was normally pushed to origin/main and the
+original clean main checkout was fast-forwarded to it. HTTPS publication was
+rejected because the existing OAuth identity lacks the workflow scope; the
+already-configured SSH identity successfully published without requesting new
+credentials or widening permissions. The complete replacement CI matrix passed:
+https://github.com/debugc-clis/logc/actions/runs/42250299181.
+All four jobs acquired hosted runners and ran race tests, vet and builds.
+The macOS Go 1.22 job logs explicitly report `go1.22.12 darwin/amd64` and
+`GOARCH=amd64`; both macOS jobs succeeded. CI recovery is therefore confirmed
+for the new Intel matrix, not inferred from configuration or a successful push.
+This documentation-only follow-up records the verified outcome.
+
 Next priorities: validated Homebrew packaging, optional shell
 completion/manual pages, and revisiting hosted ARM coverage when capacity is
 available. Do not weaken the CI gate to make the status green.
