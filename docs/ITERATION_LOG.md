@@ -410,3 +410,58 @@ https://github.com/debugc-clis/logc/actions/runs/41860392275.
 
 Next priorities remain validated Homebrew packaging (issue #2), optional shell
 completion/manual pages, and CI action runtime maintenance.
+
+## 2026-11-06 — Recover the cross-platform CI gate
+
+### PM scenario and root cause
+
+Selected a broken verification gate before adding shell completion or another
+product feature. Both previous runs ultimately failed after the last report:
+https://github.com/debugc-clis/logc/actions/runs/41860392275 and
+https://github.com/debugc-clis/logc/actions/runs/41861027959.
+Their Linux jobs passed; macOS jobs were cancelled before executing any step.
+The latest jobs had empty runner names and annotations stating that no hosted
+runner was acquired after multiple attempts, with macOS arm64 capacity warnings.
+This is infrastructure evidence, not a reproduced Go test regression.
+
+The original checkout was clean at `8793729` and matched origin/main. No open
+PRs were listed; Homebrew issue #2 remains open. Work used an exclusive lock,
+an isolated temporary clone and separate PM, Staff engineering and independent
+QA roles. Acceptance requires keeping all four OS/toolchain combinations and
+all race/vet/build checks; queued or cancelled jobs must not count as success.
+
+### Changes and verification
+
+- Replace the capacity-constrained `macos-latest` arm64 label with the explicit
+  standard `macos-15-intel` runner. Preserve Linux/macOS times Go 1.22/stable,
+  `fail-fast: false`, and every race-test, vet and build command. No skipped
+  jobs, paid runners or `continue-on-error` were introduced. This replaces
+  hosted ARM execution with Intel execution; it does not add architecture
+  coverage. Local validation still runs on macOS arm64.
+- Move checkout and setup-go to their verified v6 Node 24 actions, removing
+  reliance on the deprecated Node 20 action runtime. Explicit Go versions and
+  `cache: false` are unchanged. No Go dependencies or CLI behavior changed.
+- Engineering validated YAML syntax and structure with Ruby, including all
+  four matrix combinations and unchanged trigger/check semantics. Coordinator
+  full local race tests, targeted parser regressions, vet, a unique temporary
+  build, gofmt verification and `git diff --check` passed.
+- Official sources verified before changing the workflow:
+  [standard runner labels](https://docs.github.com/en/actions/reference/runners/github-hosted-runners),
+  [checkout v6 metadata](https://raw.githubusercontent.com/actions/checkout/v6/action.yml),
+  [setup-go v6 metadata](https://raw.githubusercontent.com/actions/setup-go/v6/action.yml).
+  Both actions declare Node 24. Their hosted-runner execution still requires
+  remote verification; local YAML parsing is not a substitute.
+- README and landing page were intentionally unchanged because no command or
+  user-facing behavior changed. Homebrew remains under construction. Existing
+  `https://logc.com/` still fails certificate hostname validation (curl 60);
+  no deployment or production configuration changes were made.
+
+Independent QA approved the minimal workflow diff and separately passed YAML
+contract checks, full race tests (9.987 seconds), vet, an isolated build and
+diff checks on macOS arm64/Go 1.22.2. Coordinator isolated CLI JSON search and
+invalid-window rejection smoke tests also passed. No blocking findings remain.
+Publication and remote results are recorded below when available.
+
+Next priorities: validated Homebrew packaging, optional shell
+completion/manual pages, and revisiting hosted ARM coverage when capacity is
+available. Do not weaken the CI gate to make the status green.
