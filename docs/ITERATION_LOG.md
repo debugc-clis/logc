@@ -538,5 +538,13 @@ Existing `https://logc.com/` still fails HTTPS hostname
 verification (curl 60); no TLS bypass or deployment configuration changes were
 made, and live site deployment is not claimed.
 
+Implementation commit `c2a1fc6` was pushed normally to origin/main and the
+original clean main checkout was fast-forwarded to it. Its complete four-job
+Linux/macOS Intel, Go 1.22/stable matrix passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/42466059943.
+This documentation-only follow-up records that confirmed remote outcome.
+Website source is published in the same implementation commit; the existing
+domain TLS mismatch still prevents confirming the live deployment.
+
 Next priorities: validated Homebrew distribution (issue #2), bounded-memory
 search-output review for very large histories, and optional shell completion.
