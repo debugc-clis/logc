@@ -23,12 +23,53 @@ func dockerLogsArgs(args []string) []string {
 }
 
 func hasDockerFollow(args []string) bool {
-	for _, arg := range args {
-		if arg == "-f" || arg == "--follow" || strings.HasPrefix(arg, "--follow=") {
-			return true
+	_, follow := inspectDockerLogsArgs(args)
+	return follow
+}
+
+func inspectDockerLogsArgs(args []string) (container string, follow bool) {
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		if arg == "--" {
+			if container == "" && index+1 < len(args) {
+				container = args[index+1]
+			}
+			break
+		}
+		if strings.HasPrefix(arg, "--") {
+			name, _, hasValue := strings.Cut(arg, "=")
+			switch name {
+			case "--since", "--until", "--tail":
+				if !hasValue {
+					index++
+				}
+			case "--follow":
+				follow = true
+			}
+			continue
+		}
+		if strings.HasPrefix(arg, "-") && len(arg) > 1 {
+			for short := 1; short < len(arg); short++ {
+				switch arg[short] {
+				case 'f':
+					follow = true
+				case 't':
+				case 'n':
+					if short+1 == len(arg) {
+						index++
+					}
+					short = len(arg)
+				default:
+					short = len(arg)
+				}
+			}
+			continue
+		}
+		if container == "" {
+			container = arg
 		}
 	}
-	return false
+	return container, follow
 }
 
 func dockerCommand(args []string) int {
@@ -56,7 +97,8 @@ func dockerCommand(args []string) int {
 		return 2
 	}
 	out := newPrinter(cfg.Color && !view.noColor && !view.json)
-	out.sourceMeta = func(string) (string, string) { return "container", dockerInput[len(dockerInput)-1] }
+	container, _ := inspectDockerLogsArgs(dockerInput)
+	out.sourceMeta = func(string) (string, string) { return "container", container }
 	out.json = view.json
 
 	docker, err := exec.LookPath("docker")
@@ -69,7 +111,7 @@ func dockerCommand(args []string) int {
 	defer stop()
 	cmd := exec.CommandContext(ctx, docker, dockerLogsArgs(dockerInput)...)
 	cmd.Stdin = os.Stdin
-	source := "docker:" + dockerInput[len(dockerInput)-1]
+	source := "docker:" + container
 	if err := runDockerLogCommand(ctx, cmd, source, query, out); err != nil && ctx.Err() == nil {
 		fmt.Fprintln(os.Stderr, "logc docker:", err)
 		return 1

@@ -103,6 +103,7 @@ Stop any follow or watch command with `Ctrl+C`.
 
 ## Recent Improvements
 
+- **Correct Docker source labels:** JSON output keeps the container name as its source and module even when Docker options follow the container, such as `logc docker api --tail 100 --follow=false --json`.
 - **Predictable recent windows:** relative `--since` values must be positive and fit a Go duration. Invalid day/week windows now fail with an explicit error instead of silently hiding logs or selecting unexpected history.
 - **Stable classification for overlapping groups:** when several configured groups match a file, the first matching group in case-sensitive alphabetical name order supplies its category and module. Classification no longer depends on map iteration order.
 - **Source filters get their own discovery slots:** default discovery applies `--category` and `--module` before selecting files. Busy unrelated services no longer consume the file limit for a filtered stream, recent search, or watch view.
@@ -293,6 +294,17 @@ Docker logs can also use logc's filtering, context, deduplication, colors, and J
 logc docker --since 30m -m ERROR -C 2 api
 logc docker --tail 100 -m ERROR --dedup --json api
 ```
+
+Docker options can also follow the container name or ID:
+
+```bash
+logc docker api --tail 100 --follow=false --json
+```
+
+This prints the last 100 available lines without following. Each JSON block
+identifies `path` as `docker:api`, `category` as `container`, and `module` as
+`api`, rather than mistaking an option value for the container. Docker arguments
+are forwarded in their original order; Docker still validates its native options.
 
 Follow mode is enabled by default. A container name or ID is required; `logc docker --` reports a usage error rather than starting a stream.
 

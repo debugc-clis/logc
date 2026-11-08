@@ -712,9 +712,9 @@ COUNT  FIRST     LAST      SOURCE                 ALERT
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">08</span><span><span class="example-syntax">logc docker [OPTIONS] NAME</span></span></div>
-            <p class="example-when">Use Docker's native log options while retaining logc filtering, deduplication, color, and JSON output.</p>
+            <p class="example-when">Use Docker's native log options before or after the container name. With <span class="mono">--json</span>, the source and module keep the container's name, not an option value.</p>
             <div class="mini-terminal">
-<pre><span class="prompt">$</span> logc docker --tail 100 --timestamps api
+<pre><span class="prompt">$</span> logc docker api --tail 100 --timestamps
 
 2026-08-08T14:31:04.812Z <span class="info">INFO</span> api listening on :8080
 2026-08-08T14:31:19.441Z <span class="warn">WARN</span> database latency=421ms

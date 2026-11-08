@@ -477,3 +477,66 @@ This documentation-only follow-up records the verified outcome.
 Next priorities: validated Homebrew packaging, optional shell
 completion/manual pages, and revisiting hosted ARM coverage when capacity is
 available. Do not weaken the CI gate to make the status green.
+
+## 2026-11-08 — Keep Docker JSON attached to the right container
+
+### PM scenario and reproduction
+
+Selected source attribution correctness before optional shell completion.
+An SRE piping Docker JSON into a service-correlating script could silently
+receive an option value as the container identity. On the original binary,
+`logc docker api --tail 100 --follow=false --json` emitted
+`path=docker:--follow=false` and `module=--follow=false`; using `--since 30m`
+after the container emitted `docker:30m`. A temporary Docker stub reproduced
+both cases without a daemon. This is an observed defect, not a demand estimate.
+
+The original checkout was clean at `85dbf35`, matched remote main and had
+passing complete CI. Homebrew issue #2 remains open; no open PRs were listed.
+Work used an isolated clone and exclusive lock, with separate PM, Staff Go
+engineering and independent QA agents and disjoint write scopes.
+
+### Changes and acceptance
+
+- Identify the container separately from Docker's value and boolean options,
+  whether options precede or follow it. Use the resulting identity for JSON
+  `path`, `category=container` and `module`, including container IDs.
+- Handle documented long option values and equals forms, `-n` attached/separate
+  values, and short boolean bundles without reordering the forwarded arguments.
+  Shared inspection also recognizes explicit bundled/short follow flags and
+  avoids interpreting an option value as a follow flag. Default following and
+  explicit `--follow=false` remain supported; native Docker still owns errors.
+- Preserve existing logc view-option stripping and `--` separator behavior.
+  No new local Docker option validation, dependencies or stream lifecycle
+  changes were introduced. Official option reference:
+  https://docs.docker.com/reference/cli/docker/container/logs/.
+- Add retained table regressions and helper-process tests using a temporary
+  Docker executable, independently asserting exact argument forwarding and
+  JSON source, category, module and event content. No real containers are used.
+- README explains the corrected JSON identity with a non-following example;
+  the landing Docker example now places native options after the container.
+  Homebrew remains explicitly under construction.
+
+### Verification and publication
+
+Coordinator reproduced the original JSON defect and repeated targeted race
+tests three times. Browser screenshots verified the changed Docker description
+at desktop 1280 px and mobile 390 px in light and dark modes; page width matched
+viewport width, internal anchors resolved, and GitHub links point to
+debugc-clis/logc. Temporary browser settings and the test tab were cleaned up.
+
+Final coordinator full race tests (16.188 seconds), vet, a unique temporary
+build, formatting and diff checks passed. The README JSON pipeline and landing
+command also passed isolated CLI smoke tests. Independent QA passed 82 CLI
+checks against its final build, including exact argv, container IDs, separator
+semantics, filters, case-insensitive matching, TTY colors and five simulated
+native errors. QA separately passed targeted tests, full race tests (16.311
+seconds), vet/build/format checks, and found no blockers. Command helper tests
+have a ten-second deadline. All CLI integrations used stubs, not real Docker.
+
+Remote publication results are recorded below when available.
+Existing `https://logc.com/` still fails HTTPS hostname
+verification (curl 60); no TLS bypass or deployment configuration changes were
+made, and live site deployment is not claimed.
+
+Next priorities: validated Homebrew distribution (issue #2), bounded-memory
+search-output review for very large histories, and optional shell completion.
