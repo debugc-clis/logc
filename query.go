@@ -182,20 +182,70 @@ func parseTimePrefixAt(s string, now time.Time) (time.Time, bool) {
 }
 
 func searchPaths(paths []string, q Query, out *printer) int {
+	const maxBatchRows = 256
+	const maxBatchBytes = 1024 * 1024
 	total := 0
 	for _, path := range paths {
-		selected, matches, err := scanLogPath(path, q)
+		selected := make([]string, 0, maxBatchRows)
+		selectedBytes := 0
+		emitted := false
+		flush := func(suffix string) {
+			if len(selected) == 0 {
+				return
+			}
+			out.block(path, selected, suffix)
+			for index := range selected {
+				selected[index] = ""
+			}
+			selected = selected[:0]
+			selectedBytes = 0
+			emitted = true
+		}
+		appendLine := func(line string) {
+			if len(selected) > 0 && (len(selected) == maxBatchRows || selectedBytes+len(line) > maxBatchBytes) {
+				flush("search continues")
+			}
+			selected = append(selected, line)
+			selectedBytes += len(line)
+		}
+		previous := ""
+		repeats := 0
+		flushRun := func() {
+			if repeats == 0 {
+				return
+			}
+			line := previous
+			if repeats > 1 {
+				line = fmt.Sprintf("%s  × %d", previous, repeats)
+			}
+			appendLine(line)
+			previous = ""
+			repeats = 0
+		}
+		matches, err := scanLogPathEach(path, q, func(line string) {
+			if !q.Dedup {
+				appendLine(line)
+				return
+			}
+			if repeats > 0 && previous == line {
+				repeats++
+				return
+			}
+			flushRun()
+			previous = line
+			repeats = 1
+		})
+		flushRun()
+		suffix := fmt.Sprintf("%d matches", matches)
+		if err != nil {
+			suffix += " before read error"
+		} else if emitted {
+			suffix += " total"
+		}
+		flush(suffix)
 		if err != nil {
 			out.errorf("%s: %v", path, err)
-			continue
 		}
-		if len(selected) == 0 {
-			continue
-		}
-		if q.Dedup {
-			selected = dedupLines(selected)
-		}
-		out.block(path, selected, fmt.Sprintf("%d matches", matches))
 		total += matches
 	}
 	return total

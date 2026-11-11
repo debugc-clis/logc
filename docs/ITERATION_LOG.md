@@ -548,3 +548,79 @@ domain TLS mismatch still prevents confirming the live deployment.
 
 Next priorities: validated Homebrew distribution (issue #2), bounded-memory
 search-output review for very large histories, and optional shell completion.
+
+## 2026-11-11 — Bound selected search results without dropping matches
+
+### PM scenario and evidence
+
+Selected dense incident-history searches before optional shell completion.
+`searchPaths` collected every selected line through `scanLogPath` before
+rendering a file. Existing scanner iteration already supported bounded delivery,
+so the chosen scope is selected-result buffering, not a new search engine.
+PM approved explicit compatibility, context/dedup and partial-read semantics.
+
+The original checkout was clean at `70cf403`, matched origin/main and had a
+passing complete CI matrix. Homebrew issue #2 remains open; no open PRs were
+listed. Separate PM, Staff Go engineering and independent QA roles worked in
+an isolated clone guarded by an exclusive lock; write scopes did not overlap.
+
+The coordinator reproduced the resource issue using an isolated 65,536-line,
+65,994,752-byte regular log and stdout redirected to `/dev/null`. The original
+binary reported 65,536 matches and peak RSS 121,880,576 bytes; the updated binary
+reported the same count with peak RSS 11,599,872 bytes. These are one local
+macOS fixture's measurements, not an OOM reproduction, general performance
+guarantee or bound on total process memory.
+
+### Implemented contract
+
+- Search output uses the existing streaming selector and batches at most 256
+  emitted rows or 1 MiB of undecorated text, including duplicate-count suffixes.
+  One scanner-accepted line larger than the byte limit occupies its own batch.
+  JSON escaping/metadata, scanner state and requested before-context add memory.
+- Preserve selected order, context overlap, separators, ignore/time filters
+  and raw direct-match totals. Deduplication carries one pending run across
+  flushes and keeps the existing `line  × N` format; it does not retain history.
+- Small successful output remains one block with `N matches`. Larger files
+  emit `search continues` blocks followed by a nonempty `N matches total`
+  block. JSON fields remain unchanged, but one path can have multiple blocks.
+- On read error, retain and label the selected readable prefix, including
+  pending dedup state, with `N matches before read error`; keep stderr details,
+  include prefix matches in totals and continue other files. This iteration
+  deliberately does not change the existing search-error exit-code policy.
+- No log writes, temporary log spooling, new flags or dependencies were added.
+  Production scanner/context and follow/watch implementations are unchanged.
+  README and landing page document batching and incomplete-read warnings;
+  Homebrew remains explicitly under construction.
+
+### Verification and publication
+
+Retained regressions cover plain/gzip input, row/byte limits and exact EOF
+boundaries, an oversized accepted row, context/filter order, duplicate runs,
+raw counts, small text output, no matches and readable prefixes after errors.
+A checking writer validates dense output without accumulating it. A first-
+batch writer truncates its own temporary fixture to prove emission occurs
+before the original EOF, not just after a full-file collection.
+
+Coordinator targeted race tests, full race tests, vet, unique temporary build,
+gofmt verification and diff checks passed locally. Independent QA and final
+remote results are recorded below when available. Independent QA passed
+baseline/candidate CLI comparisons for boundaries, bytes/UTF-8/escaping,
+context/filter/time behavior, cross-batch dedup and partial read errors. Dense
+JSON output flattened to the same 65,536 lines and SHA-256, split into 256
+bounded blocks. Its separate RSS recheck measured text 115,195,904 to
+11,894,784 bytes and JSON 279,592,960 to 11,993,088 bytes for that fixture.
+QA also passed full race/vet/build/format checks and isolated search-follow
+append, rotation, truncation, discovery and SIGTERM checks. No blockers remain;
+these are local macOS results, not Linux CI or universal memory guarantees.
+Browser screenshots verified
+the updated search description at desktop 1280 px and mobile 390 px in both
+light/dark modes, with matching document/viewport widths and valid internal
+anchors. GitHub links target debugc-clis/logc; temporary emulation was reset.
+
+The existing `https://logc.com/` certificate hostname mismatch remains (curl
+60). No TLS bypass or production deployment changes were made; source
+publication is not proof of a successful live deployment.
+
+Next priorities: define explicit failed/partial-search exit semantics, validate
+Homebrew distribution (issue #2), and optional shell completion. Keep context
+memory and synchronous-output limitations separate from selected-output bounds.

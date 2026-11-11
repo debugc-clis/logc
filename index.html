@@ -626,7 +626,7 @@ $ tail -f app.log | grep ERROR</pre>
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">03</span><span><span class="example-syntax">logc TARGET REGEX</span> — search a source</span></div>
-            <p class="example-when">Use when you know the service and symptom but not which active, rotated, or compressed file contains it.</p>
+            <p class="example-when">Search active, rotated, or compressed logs for a known symptom. Large results stream in bounded batches; JSON may contain several blocks for one path. The last block reports the file's total matches, or marks a readable prefix if a read error occurs; check stderr.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc payment ERROR --since 30m -C 2
 

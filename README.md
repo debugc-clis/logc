@@ -103,6 +103,7 @@ Stop any follow or watch command with `Ctrl+C`.
 
 ## Recent Improvements
 
+- **Bounded search output:** dense file and gzip searches emit results in bounded batches instead of retaining every selected line until the file ends. Context order and duplicate counts are preserved across batches.
 - **Correct Docker source labels:** JSON output keeps the container name as its source and module even when Docker options follow the container, such as `logc docker api --tail 100 --follow=false --json`.
 - **Predictable recent windows:** relative `--since` values must be positive and fit a Go duration. Invalid day/week windows now fail with an explicit error instead of silently hiding logs or selecting unexpected history.
 - **Stable classification for overlapping groups:** when several configured groups match a file, the first matching group in case-sensitive alphabetical name order supplies its category and module. Classification no longer depends on map iteration order.
@@ -220,6 +221,27 @@ logc api ERROR --dedup
 logc api ERROR --category app --module api
 logc api ERROR --json
 ```
+
+Large searches can emit several blocks for the same file, including with JSON:
+
+```bash
+logc api ERROR --all --json
+```
+
+Each block holds at most 256 output rows or 1 MiB of undecorated line text
+(including context separators and duplicate-count suffixes). One accepted line
+larger than 1 MiB occupies its own block. JSON escaping and metadata add overhead;
+these are output-buffer limits, not a limit on total matches or context memory.
+Concatenate each block's `lines` array in output order to retain the selected
+sequence. Duplicate runs still collapse across batch boundaries.
+
+Small searches retain the `N matches` suffix. For a multi-block file, earlier
+blocks say `search continues` and the last says `N matches total`, counting
+direct matches before context and deduplication. If reading fails, already
+selected results remain visible; the final nonempty block says
+`N matches before read error` and stderr reports the cause. Such counts cover
+only the readable prefix. Always inspect stderr: this change does not alter the
+existing search-error exit-code policy.
 
 ### 3. Search, then follow
 
@@ -452,6 +474,7 @@ Because logrotate configuration may include unreadable files or shell-expanded r
 - **Bounded discovery:** the default recent window and file limit prevent accidental full-disk scans.
 - **Safe roots:** recursive discovery refuses filesystem-root scans.
 - **Long-running follow:** active files are polled and discovery is refreshed without retaining full log history in memory.
+- **Search buffers:** selected search results are emitted in bounded batches; scanner buffers, requested before-context, duplicate state and output encoding use additional memory.
 - **Rotation handling:** truncation and inode replacement reopen the active source; rotated and gzip files remain searchable.
 - **Copytruncate limits:** when polling observes a file shrink, follow/watch reset partial-line state so old fragments are not joined to new entries. If a file is truncated and grows back to the previous read offset or beyond between polls, that truncation may not be detected; unread data removed by truncation cannot be recovered.
 - **Rotation backlog:** normal follow and `watch` drain the old file in bounded reads before switching to its replacement, including backlogs larger than 4 MiB.
