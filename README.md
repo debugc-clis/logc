@@ -446,7 +446,7 @@ This rule governs file metadata and category/module filters. An explicit group s
 | `recent` | `24h` | Recent-file discovery window |
 | `flush_interval` | `500ms` | Maximum wait before buffered lines are printed |
 | `scan_interval` | `5s` | Follow-mode discovery interval |
-| `max_batch_lines` | `10` | Lines emitted per source in one batch |
+| `max_batch_lines` | `10` | Live file-follow rows emitted per source per flush; search batches use the separate fixed limits described above |
 | `max_buffer_lines` | `2000` | Maximum pending lines retained per source |
 | `color` | `true` | Enable terminal colors when stdout is a TTY |
 | `ignore_line` | none | Regular expressions omitted from output |

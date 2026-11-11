@@ -624,3 +624,12 @@ publication is not proof of a successful live deployment.
 Next priorities: define explicit failed/partial-search exit semantics, validate
 Homebrew distribution (issue #2), and optional shell completion. Keep context
 memory and synchronous-output limitations separate from selected-output bounds.
+
+Implementation commit `a6dc91f` was normally pushed to origin/main and the
+original clean main checkout was fast-forwarded to it. The complete four-job
+Linux/macOS Intel, Go 1.22/stable CI matrix passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/42993274116.
+This documentation-only follow-up records the remote result and clarifies that
+`max_batch_lines` controls live file-follow flushing, not the new fixed search
+batch limits. Website source is published; the existing TLS issue still means
+live deployment is not confirmed.
