@@ -181,10 +181,11 @@ func parseTimePrefixAt(s string, now time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func searchPaths(paths []string, q Query, out *printer) int {
+func searchPaths(paths []string, q Query, out *printer) (int, error) {
 	const maxBatchRows = 256
 	const maxBatchBytes = 1024 * 1024
 	total := 0
+	failures := 0
 	for _, path := range paths {
 		selected := make([]string, 0, maxBatchRows)
 		selectedBytes := 0
@@ -244,11 +245,15 @@ func searchPaths(paths []string, q Query, out *printer) int {
 		}
 		flush(suffix)
 		if err != nil {
+			failures++
 			out.errorf("%s: %v", path, err)
 		}
 		total += matches
 	}
-	return total
+	if failures > 0 {
+		return total, fmt.Errorf("search incomplete: failed to read %d of %d files", failures, len(paths))
+	}
+	return total, nil
 }
 
 type indexedLogLine struct {

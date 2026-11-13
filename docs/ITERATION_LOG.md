@@ -633,3 +633,79 @@ This documentation-only follow-up records the remote result and clarifies that
 `max_batch_lines` controls live file-follow flushing, not the new fixed search
 batch limits. Website source is published; the existing TLS issue still means
 live deployment is not confirmed.
+
+## 2026-11-13 — Return failure for incomplete file searches
+
+### PM scope and reproduction
+
+Selected explicit search-status propagation before new features: a matching
+result must not imply that every selected file was successfully searched.
+On the original CLI, a temporary gzip file with a corrupted checksum emitted
+one readable JSON event, a `before read error` suffix and a checksum diagnostic,
+but still exited 0. Historical search-follow could then enter a live stream,
+masking its incomplete startup phase. No production logs/services were used.
+
+The original checkout was clean at `8e3d53d`, matched origin/main and had
+passing full CI. No open PRs were listed; Homebrew issue #2 remains open.
+Separate PM, Staff Go engineering and independent QA agents worked in an
+isolated clone with disjoint write scopes and an exclusive iteration lock.
+PM approved completing the whole initial search before failing, rather than
+abandoning healthy sources at the first error.
+
+### Implemented status contract
+
+- `searchPaths` explicitly returns both matches and an error. It still attempts
+  all selected paths, preserves readable prefixes and totals, and emits one
+  detailed diagnostic per failed path. Only a failure count is accumulated;
+  the final summary does not retain an unbounded list of error values.
+- Completed finite file searches return 0, including zero matches. Any selected
+  file read failure returns 1, even if other files have matches; existing CLI
+  argument/regex/time validation keeps exit 2. JSON fields, bounded batches,
+  context/dedup and candidate-selection rules remain unchanged.
+- If an initial `-f` search has a read failure, finish collecting the other
+  files' evidence, report that live follow was not started and exit 1. The
+  diagnostic explains an explicit `--current` retry for a directory/active
+  source with broken archives; that skips history, not active-file errors or
+  repairs. Traditional system-file historical bootstrap also returns its
+  search error before creating a follower, without an inapplicable retry hint.
+- Plain follow, watch, Docker and native journal streams are unchanged. No
+  new flags, dependencies or production log writes were introduced.
+- README and landing examples explain 0/1/2, incomplete-history follow startup
+  and deliberate active-only recovery. README notes that Bash/zsh pipelines
+  need `pipefail` to retain the producer's nonzero status. Homebrew remains
+  explicitly under construction.
+
+### Verification and publication
+
+New retained regressions exercise actual CLI status and output for corrupt
+gzip headers/checksums, oversized lines with/without readable prefixes,
+mixed-file ordering, no matches, time-only searches, invalid arguments and
+failed follow startup. Existing batching/follow tests now assert explicit
+returned errors. Unit coverage also checks missing files, multiple failures,
+empty candidate lists and system-file bootstrap without a real system service.
+
+Independent QA passed 117 final CLI assertions, including a five-file fixture
+with three failures and seven retained matches, a 700-line partial gzip across
+batches/dedup, active-only recovery and normal follow append/SIGTERM exit 0.
+It separately passed uncached targeted race tests (5.972 seconds), full race
+tests (20.903 seconds), vet, isolated build, formatting and diff checks on macOS.
+No blocking findings remained; these are not remote Linux CI results.
+
+Coordinator final targeted race tests (6.294 seconds), full race tests (21.164
+seconds), vet, unique temporary build, gofmt verification and diff checks passed
+on macOS arm64/Go 1.22.2. Test fixture builds have 60-second deadlines and CLI
+checks have five-second deadlines. Additional independent QA passed 16 actual
+Bash/zsh pipelines through cat/jq, with and without pipefail: failures remain
+status 1 with pipefail but are masked by a successful consumer without it.
+Healthy input remains 0. This confirms the documented shell limitation.
+
+Remote publication results are recorded below when available.
+Browser DOM/screenshots verified the changed search and
+search-follow descriptions at 1280 px desktop and 390 px mobile in light/dark
+modes, with no page overflow, valid internal anchors and current GitHub links.
+Emulation was reset and the isolated test tab was closed.
+
+The existing `https://logc.com/` certificate hostname mismatch remains (curl
+60). No TLS bypass or production deployment changes were made, and live site
+deployment is not claimed. Next priorities remain validated Homebrew
+distribution (issue #2), bounded requested-context review and shell completion.

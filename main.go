@@ -358,9 +358,17 @@ func realMain() int {
 	searchMode := q.Regex != nil || !q.Since.IsZero()
 	if searchMode {
 		sortRecentFirst(paths)
-		matches := searchPaths(paths, q, out)
+		matches, err := searchPaths(paths, q, out)
 		if q.Regex != nil {
 			out.infof("%d matching lines", matches)
+		}
+		if err != nil {
+			if opts.Follow {
+				out.errorf("historical search incomplete; live follow not started: %v; retry a directory or active-file target with --current to skip broken archives (does not repair them)", err)
+			} else {
+				out.errorf("%v", err)
+			}
+			return 1
 		}
 		if !opts.Follow {
 			return 0

@@ -103,6 +103,7 @@ Stop any follow or watch command with `Ctrl+C`.
 
 ## Recent Improvements
 
+- **Search failures are visible to scripts:** file searches return exit code 1 if any selected file cannot be fully read, while preserving readable results from every attempted source. An incomplete initial search does not silently start live follow.
 - **Bounded search output:** dense file and gzip searches emit results in bounded batches instead of retaining every selected line until the file ends. Context order and duplicate counts are preserved across batches.
 - **Correct Docker source labels:** JSON output keeps the container name as its source and module even when Docker options follow the container, such as `logc docker api --tail 100 --follow=false --json`.
 - **Predictable recent windows:** relative `--since` values must be positive and fit a Go duration. Invalid day/week windows now fail with an explicit error instead of silently hiding logs or selecting unexpected history.
@@ -240,8 +241,14 @@ blocks say `search continues` and the last says `N matches total`, counting
 direct matches before context and deduplication. If reading fails, already
 selected results remain visible; the final nonempty block says
 `N matches before read error` and stderr reports the cause. Such counts cover
-only the readable prefix. Always inspect stderr: this change does not alter the
-existing search-error exit-code policy.
+only the readable prefix. File searches return **0** when all selected files
+are searched without a read failure (including zero matches), and **1** when
+any selected file cannot be fully read. Other selected files are still attempted,
+and their matches are retained. Invalid CLI arguments remain exit code **2**.
+The status contract is the same for terminal and JSON output; diagnostics stay
+on stderr. Unlike grep, a successful search with no matches is not a failure.
+When piping output through another command in Bash or zsh, use
+`set -o pipefail` if the pipeline must retain logc's nonzero status.
 
 ### 3. Search, then follow
 
@@ -252,6 +259,20 @@ logc api 'timeout|reset' --since 30m -f
 ```
 
 This is useful when you need immediate context before waiting for the next occurrence.
+
+If any file fails during the initial search, logc finishes attempting the other
+selected files, reports the incomplete search and exits 1 **without starting
+live follow**. If only rotated/compressed history is damaged, explicitly skip
+that history and retry against the active directory or source:
+
+```bash
+logc /srv/api/log ERROR --current -f
+```
+
+`--current` skips history; it does not repair files or bypass errors in active
+logs. The historical bootstrap of the traditional system-file fallback also
+stops before following if its search fails. Plain follow, watch, Docker and
+native journal streams keep their existing behavior.
 
 To keep watching a log directory across deployments that create new filenames:
 

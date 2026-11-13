@@ -62,8 +62,8 @@ func TestSearchFollowDiscovery(t *testing.T) {
 			}
 			var output, diagnostics bytes.Buffer
 			out := &printer{stdout: &output, stderr: &diagnostics}
-			if matches := searchPaths(resolved.Paths, query, out); matches != 3 {
-				t.Fatalf("initial search matches=%d, want active and both historical files; paths=%v", matches, resolved.Paths)
+			if matches, err := searchPaths(resolved.Paths, query, out); err != nil || matches != 3 {
+				t.Fatalf("initial search matches=%d error=%v, want active and both historical files; paths=%v", matches, err, resolved.Paths)
 			}
 			output.Reset()
 			follower := newSearchFollower(cfg, resolved, nonHistorical(resolved.Paths), cfg.Excludes, out, query)

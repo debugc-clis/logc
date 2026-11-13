@@ -114,9 +114,12 @@ func runSystemFileLogs(ctx context.Context, cfg Config, activePaths []string, li
 		}
 		sortRecentFirst(paths)
 		if query.All || !query.Since.IsZero() {
-			matches := searchPaths(paths, query, out)
+			matches, err := searchPaths(paths, query, out)
 			if query.Regex != nil {
 				out.infof("%d matching lines", matches)
+			}
+			if err != nil {
+				return err
 			}
 		} else {
 			showSnapshot(paths, lines, query, out)

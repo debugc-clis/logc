@@ -94,7 +94,10 @@ func TestSearchBatchesLimits(t *testing.T) {
 						next++
 					}
 				}}
-				matches := searchPaths([]string{path}, searchBatchQuery(t, "", 0, 0, false), &printer{json: true, stdout: writer, stderr: io.Discard})
+				matches, err := searchPaths([]string{path}, searchBatchQuery(t, "", 0, 0, false), &printer{json: true, stdout: writer, stderr: io.Discard})
+				if err != nil {
+					t.Fatal(err)
+				}
 				if matches != len(test.lines) || next != len(test.lines) || writer.blocks != test.blocks {
 					t.Fatalf("matches=%d rows=%d blocks=%d", matches, next, writer.blocks)
 				}
@@ -124,7 +127,10 @@ func TestSearchBatchesEmitsBeforeEOF(t *testing.T) {
 			}
 		}
 	}
-	matches := searchPaths([]string{path}, searchBatchQuery(t, "hit", 0, 0, false), &printer{json: true, stdout: writer, stderr: io.Discard})
+	matches, err := searchPaths([]string{path}, searchBatchQuery(t, "hit", 0, 0, false), &printer{json: true, stdout: writer, stderr: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if matches < 256 || matches >= 4096 || writer.rows != matches {
 		t.Fatalf("matches=%d output rows=%d; expected unread tail to be truncated", matches, writer.rows)
 	}
@@ -153,7 +159,10 @@ func TestSearchBatchesContextAndDedup(t *testing.T) {
 				}
 				var got []string
 				writer := &searchBlockWriter{t: t, visit: func(block searchTestBlock) { got = append(got, block.Lines...) }}
-				matches := searchPaths([]string{path}, query, &printer{json: true, stdout: writer, stderr: io.Discard})
+				matches, err := searchPaths([]string{path}, query, &printer{json: true, stdout: writer, stderr: io.Discard})
+				if err != nil {
+					t.Fatal(err)
+				}
 				if matches != 264 || !reflect.DeepEqual(got, want) || writer.last.Suffix != "264 matches total" {
 					t.Fatalf("matches=%d rows=%d want=%d suffix=%q", matches, len(got), len(want), writer.last.Suffix)
 				}
@@ -177,7 +186,10 @@ func TestSearchBatchesDedupBoundary(t *testing.T) {
 			writeSearchFollowLog(t, path, strings.Join(lines, "\n")+"\n")
 			var got []string
 			writer := &searchBlockWriter{t: t, visit: func(block searchTestBlock) { got = append(got, block.Lines...) }}
-			matches := searchPaths([]string{path}, searchBatchQuery(t, "hit", 0, 0, true), &printer{json: true, stdout: writer, stderr: io.Discard})
+			matches, err := searchPaths([]string{path}, searchBatchQuery(t, "hit", 0, 0, true), &printer{json: true, stdout: writer, stderr: io.Discard})
+			if err != nil {
+				t.Fatal(err)
+			}
 			if matches != len(lines) || !reflect.DeepEqual(got, dedupLines(lines)) {
 				t.Fatalf("matches=%d rows=%d", matches, len(got))
 			}
@@ -220,7 +232,10 @@ func TestSearchBatchesPartialReadError(t *testing.T) {
 							suffix = block.Suffix
 						}
 					}}
-					matches := searchPaths([]string{path, good}, searchBatchQuery(t, "hit", 0, 0, dedup), &printer{json: true, stdout: writer, stderr: &diagnostics})
+					matches, err := searchPaths([]string{path, good}, searchBatchQuery(t, "hit", 0, 0, dedup), &printer{json: true, stdout: writer, stderr: &diagnostics})
+					if err == nil || err.Error() != "search incomplete: failed to read 1 of 2 files" {
+						t.Fatalf("partial search error=%v", err)
+					}
 					want := strings.Split(strings.TrimSuffix(strings.Repeat("hit repeated\n", count), "\n"), "\n")
 					if dedup {
 						want = dedupLines(want)
@@ -240,7 +255,10 @@ func TestSearchBatchesSmallTextAndNoMatches(t *testing.T) {
 	for _, pattern := range []string{"hit", "absent"} {
 		var output, diagnostics bytes.Buffer
 		out := &printer{stdout: &output, stderr: &diagnostics, now: func() time.Time { return time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC) }}
-		matches := searchPaths([]string{path}, searchBatchQuery(t, pattern, 0, 0, true), out)
+		matches, err := searchPaths([]string{path}, searchBatchQuery(t, pattern, 0, 0, true), out)
+		if err != nil {
+			t.Fatal(err)
+		}
 		want := ""
 		if pattern == "hit" {
 			want = "\n" + path + " [shown 12:00:00 · 2 matches]\n  hit repeated  × 2\n"
@@ -263,7 +281,10 @@ func TestSearchBatchesDedupFormattedByteLimit(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "app.log")
 			writeSearchFollowLog(t, path, first+"\nrepeated\nrepeated\n")
 			writer := &searchBlockWriter{t: t}
-			matches := searchPaths([]string{path}, searchBatchQuery(t, "", 0, 0, true), &printer{json: true, stdout: writer, stderr: io.Discard})
+			matches, err := searchPaths([]string{path}, searchBatchQuery(t, "", 0, 0, true), &printer{json: true, stdout: writer, stderr: io.Discard})
+			if err != nil {
+				t.Fatal(err)
+			}
 			if matches != 3 || writer.rows != 2 || writer.blocks != 1+extra {
 				t.Fatalf("matches=%d rows=%d blocks=%d", matches, writer.rows, writer.blocks)
 			}
@@ -289,7 +310,10 @@ func TestSearchBatchesDenseBoundedWriter(t *testing.T) {
 		t.Fatal(err)
 	}
 	writer := &searchBlockWriter{t: t}
-	matches := searchPaths([]string{path}, searchBatchQuery(t, "hit", 0, 0, false), &printer{json: true, stdout: writer, stderr: io.Discard})
+	matches, err := searchPaths([]string{path}, searchBatchQuery(t, "hit", 0, 0, false), &printer{json: true, stdout: writer, stderr: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if matches != rows || writer.rows != rows || writer.blocks < 2 || writer.last.Suffix != "8192 matches total" {
 		t.Fatalf("matches=%d rows=%d blocks=%d suffix=%q", matches, writer.rows, writer.blocks, writer.last.Suffix)
 	}

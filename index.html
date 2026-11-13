@@ -626,7 +626,7 @@ $ tail -f app.log | grep ERROR</pre>
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">03</span><span><span class="example-syntax">logc TARGET REGEX</span> — search a source</span></div>
-            <p class="example-when">Search active, rotated, or compressed logs for a known symptom. Large results stream in bounded batches; JSON may contain several blocks for one path. The last block reports the file's total matches, or marks a readable prefix if a read error occurs; check stderr.</p>
+            <p class="example-when">Search active, rotated, or compressed logs in bounded batches. Read failures preserve useful results but return exit code 1; a complete search, even with no matches, returns 0. JSON can contain several blocks per path; incomplete prefixes are marked and errors go to stderr.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc payment ERROR --since 30m -C 2
 
@@ -659,7 +659,7 @@ $ tail -f app.log | grep ERROR</pre>
 
           <article class="card example-card" id="search-follow">
             <div class="example-label"><span class="badge">05</span><span><span class="example-syntax">logc TARGET REGEX -f</span> — search, then follow</span></div>
-            <p class="example-when">Use when an incident began recently and you want historical context plus new matching events. Directory, quoted glob, and configured-group targets also discover new matching active files on rescan.</p>
+            <p class="example-when">Search history, then follow new matching events and discover new active files in the selected directory, glob, or group. If the initial search has a read failure, logc exits 1 before following. To deliberately skip damaged archives, retry an active source with <span class="mono">--current -f</span>.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc api 'timeout|reset' --since 30m -f
 
