@@ -709,3 +709,11 @@ The existing `https://logc.com/` certificate hostname mismatch remains (curl
 60). No TLS bypass or production deployment changes were made, and live site
 deployment is not claimed. Next priorities remain validated Homebrew
 distribution (issue #2), bounded requested-context review and shell completion.
+
+Implementation commit `a20562f` was normally pushed to origin/main and the
+original clean main checkout was fast-forwarded to it. Its complete four-job
+Linux/macOS Intel, Go 1.22/stable CI matrix passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/43398388049.
+This documentation-only follow-up records the confirmed remote outcome.
+README and landing-page source are published; the existing certificate issue
+still prevents confirming a live website deployment.
