@@ -778,3 +778,11 @@ changes were made. Publication and remote CI results are recorded below.
 Next priorities: validated Homebrew distribution (issue #2), an explicit
 context-budget policy if operational evidence warrants one, and shell
 completion. Do not describe lazy context growth as bounded total memory.
+
+Implementation commit `2695b5c` was normally pushed to origin/main and the
+original clean main checkout was fast-forwarded to it. The complete four-job
+Linux/macOS Intel, Go 1.22/stable CI matrix passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/43697941563.
+This documentation-only follow-up records the confirmed remote result.
+Website source is published; the existing TLS mismatch still prevents
+confirming a live deployment.
