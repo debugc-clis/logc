@@ -103,6 +103,7 @@ Stop any follow or watch command with `Ctrl+C`.
 
 ## Recent Improvements
 
+- **Safer large context requests:** file searches grow before-context storage only as rows are read, rather than reserving the entire requested `-C` window up front. Snapshot context bounds also avoid integer overflow that could hide matching rows.
 - **Search failures are visible to scripts:** file searches return exit code 1 if any selected file cannot be fully read, while preserving readable results from every attempted source. An incomplete initial search does not silently start live follow.
 - **Bounded search output:** dense file and gzip searches emit results in bounded batches instead of retaining every selected line until the file ends. Context order and duplicate counts are preserved across batches.
 - **Correct Docker source labels:** JSON output keeps the container name as its source and module even when Docker options follow the container, such as `logc docker api --tail 100 --follow=false --json`.
@@ -496,6 +497,7 @@ Because logrotate configuration may include unreadable files or shell-expanded r
 - **Safe roots:** recursive discovery refuses filesystem-root scans.
 - **Long-running follow:** active files are polled and discovery is refreshed without retaining full log history in memory.
 - **Search buffers:** selected search results are emitted in bounded batches; scanner buffers, requested before-context, duplicate state and output encoding use additional memory.
+- **Context memory:** file searches retain before-context lazily and only for regex searches. A large `-C` on a small file does not reserve space for unseen rows, but context memory still grows with actual retained lines and their sizes; this is not a new global memory limit or a context cap. Large snapshot windows keep all available eligible context without overflowing their bounds.
 - **Rotation handling:** truncation and inode replacement reopen the active source; rotated and gzip files remain searchable.
 - **Copytruncate limits:** when polling observes a file shrink, follow/watch reset partial-line state so old fragments are not joined to new entries. If a file is truncated and grows back to the previous read offset or beyond between polls, that truncation may not be detected; unread data removed by truncation cannot be recovered.
 - **Rotation backlog:** normal follow and `watch` drain the old file in bounded reads before switching to its replacement, including backlogs larger than 4 MiB.

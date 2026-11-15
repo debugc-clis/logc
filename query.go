@@ -286,7 +286,7 @@ func scanLogPathEach(path string, q Query, emit func(string)) (int, error) {
 
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 64*1024), maxCarryBytes)
-	before := make([]indexedLogLine, 0, q.Before)
+	var before []indexedLogLine
 	lastSelected := -2
 	afterRemaining := 0
 	matches := 0
@@ -325,7 +325,7 @@ func scanLogPathEach(path string, q Query, emit func(string)) (int, error) {
 			afterRemaining--
 		}
 
-		if q.Before > 0 {
+		if q.Regex != nil && q.Before > 0 {
 			before = append(before, line)
 			if len(before) > q.Before {
 				before = before[len(before)-q.Before:]
@@ -375,9 +375,9 @@ func selectLines(lines []string, fileMod time.Time, q Query) []string {
 		if start < 0 {
 			start = 0
 		}
-		end := i + q.After
-		if end >= len(lines) {
-			end = len(lines) - 1
+		end := len(lines) - 1
+		if q.After < end-i {
+			end = i + q.After
 		}
 		for j := start; j <= end; j++ {
 			if eligible[j] {

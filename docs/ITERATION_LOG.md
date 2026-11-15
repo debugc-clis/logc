@@ -717,3 +717,64 @@ https://github.com/debugc-clis/logc/actions/runs/43398388049.
 This documentation-only follow-up records the confirmed remote outcome.
 README and landing-page source are published; the existing certificate issue
 still prevents confirming a live website deployment.
+
+## 2026-11-15 — Safely handle large context requests on small logs
+
+### PM selection and reproductions
+
+Selected two concrete context correctness defects rather than introducing an
+arbitrary context-memory cap. On the original binary, a two-line temporary
+file searched with `-C 9223372036854775807` panicked with `makeslice: cap out of
+range`: the scanner reserved the full requested before-window before seeing
+any rows. The coordinator also reproduced snapshot selection returning no
+rows for a middle match with MaxInt after-context, because index addition
+overflowed. Neither reproduction required large allocations or real services.
+
+The original checkout was clean at `af81b6d`, matched origin/main and had a
+passing full CI matrix. Homebrew issue #2 remains open and no open PRs were
+listed. Separate PM, Staff Go engineering and independent QA roles worked in
+an isolated clone under an exclusive lock with disjoint write scopes.
+
+### Implemented changes and limits
+
+- File-search before-context grows only as actual rows are observed; regex-free
+  time queries do not retain unused context. A large valid request on a small
+  file no longer preallocates for unseen rows or panics from that allocation.
+- Snapshot selection compares requested after-context with remaining rows
+  before adding indices, keeping middle/last matches and available context
+  instead of losing them to integer overflow.
+- Preserve requested context, filters, ordering, separators, match counts,
+  deduplication and the existing 0/1/2 search status contract. No context is
+  silently truncated and no new limit, flag or dependency is introduced.
+- This is not a global memory bound: actual retained context still scales
+  with the request and observed line sizes. Follow and external-stream context
+  storage are not changed. README and the landing option note state this
+  limitation; Homebrew remains explicitly under construction.
+
+### Verification and publication
+
+Retained tests cover MaxInt context for plain/gzip searches, time-only queries,
+middle/last snapshot matches, normal overlap and ignore/time filtering. Actual
+CLI tests use tiny logs, a 60-second build deadline and five-second run deadlines.
+The coordinator confirmed the original panic now returns the exact two selected
+rows, one direct match and exit 0. Targeted race tests (1.605 seconds), full
+race tests (21.013 seconds), vet, unique-path build, formatting and diff checks
+passed locally on macOS arm64/Go 1.22.2.
+
+Independent QA passed 273 final CLI executions plus four 704-row cross-batch
+cases and 1,200 randomized snapshot-oracle cases under race. It checked empty
+and tiny files, plain/gzip, matching/no-match/time-only queries, filters, dedup,
+JSON counts and invalid context values still exiting 2. Its uncached full race
+suite (21.313 seconds), vet/build/format and diff checks also passed, with no
+blocking findings. These are local results, not yet remote Linux CI evidence.
+
+Browser DOM/screenshots verified the updated context option at desktop 1280 px
+and mobile 390 px in light/dark modes. Page widths matched their viewports;
+internal anchors and GitHub links were correct. Temporary emulation was reset
+and the test page was closed. The existing `https://logc.com/` certificate
+hostname mismatch persists (curl 60); no TLS bypass or production configuration
+changes were made. Publication and remote CI results are recorded below.
+
+Next priorities: validated Homebrew distribution (issue #2), an explicit
+context-budget policy if operational evidence warrants one, and shell
+completion. Do not describe lazy context growth as bounded total memory.
