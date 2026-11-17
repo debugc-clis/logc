@@ -101,8 +101,31 @@ Plain `logc` is a follow command: it prints the latest 10 lines from up to 20 re
 
 Stop any follow or watch command with `Ctrl+C`.
 
+### Optional Bash completion
+
+In **Bash 3.2 or newer**, enable completion for the current shell:
+
+```bash
+source <(logc completion bash)
+```
+
+Tab completes static commands, subcommands and relevant flags, with normal
+shell filename completion for targets, including paths with spaces. For future
+interactive Bash sessions, add that line to the Bash startup file you use;
+logc does not edit shell configuration automatically.
+
+Generating the script does not load logc configuration or discover logs.
+Tab handling uses shell built-ins rather than running logc, Docker or source
+discovery; normal filename completion still inspects the local directory.
+Dynamic source groups, modules, containers, processes and ports are not
+enumerated. Zsh/fish completion is not implemented yet.
+
+`completion` is now a reserved first-word command. To address a target with
+that name, use `logc ./completion` or `logc -- completion` instead.
+
 ## Recent Improvements
 
+- **Optional Bash completion:** `logc completion bash` prints a Bash 3.2-compatible script for command and flag completion, without starting log discovery or external services.
 - **Safer large context requests:** file searches grow before-context storage only as rows are read, rather than reserving the entire requested `-C` window up front. Snapshot context bounds also avoid integer overflow that could hide matching rows.
 - **Search failures are visible to scripts:** file searches return exit code 1 if any selected file cannot be fully read, while preserving readable results from every attempted source. An incomplete initial search does not silently start live follow.
 - **Bounded search output:** dense file and gzip searches emit results in bounded batches instead of retaining every selected line until the file ends. Context order and duplicate counts are preserved across batches.
@@ -545,6 +568,7 @@ logc docker --since 30m api
 - [x] Detect common logrotate coverage and follow rotated files.
 - [x] Emit colored terminal output and structured JSON.
 - [x] Load defaults plus user-defined source groups from `~/.logc.conf`.
+- [x] Generate optional Bash command/flag completion with native filename fallback.
 
 ### Planned
 
@@ -552,7 +576,7 @@ logc docker --since 30m api
 - [ ] Publish and validate tagged binary releases for supported platforms.
 - [ ] Expand distribution-specific discovery fixtures and integration tests.
 - [ ] Improve source ranking for very large hosts.
-- [ ] Add optional shell completions and manual pages.
+- [ ] Extend completion to other shells and add manual pages.
 
 ## Contributing
 

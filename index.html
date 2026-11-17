@@ -770,7 +770,18 @@ path=/var/log/mysql/*.log
           </article>
 
           <article class="card example-card">
-            <div class="example-label"><span class="badge">12</span><span><span class="example-syntax">logc help / version</span></span></div>
+            <div class="example-label"><span class="badge">12</span><span><span class="example-syntax">logc completion bash</span></span></div>
+            <p class="example-when">In Bash 3.2+, enable static command and flag completion, with normal filename completion for targets. Tab does not run log discovery or Docker. Dynamic source/container names and other shells are not supported yet.</p>
+            <div class="mini-terminal">
+<pre><span class="prompt">$</span> source &lt;(logc completion bash)
+
+<span class="dim">Optional; activates in the current Bash shell.
+Use Tab to complete commands and relevant flags.</span></pre>
+            </div>
+          </article>
+
+          <article class="card example-card">
+            <div class="example-label"><span class="badge">13</span><span><span class="example-syntax">logc help / version</span></span></div>
             <p class="example-when">Use these stable utility commands to inspect the installed CLI syntax and build version.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc version

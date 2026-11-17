@@ -32,6 +32,7 @@ USAGE
   logc ls [FILTERS]            Discover classified local log sources
   logc where TARGET            Show what a target resolves to
   logc config {init|path|show} Manage user configuration
+  logc completion bash         Print a static Bash completion script
 
 EXAMPLES
   logc api
@@ -247,6 +248,8 @@ func realMain() int {
 			return 0
 		case "config":
 			return configCommand(os.Args[2:])
+		case "completion":
+			return completionCommand(os.Args[2:], os.Stdout, os.Stderr)
 		case "init-config":
 			return configCommand(append([]string{"init"}, os.Args[2:]...))
 		case "show-config":

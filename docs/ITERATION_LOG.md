@@ -786,3 +786,75 @@ https://github.com/debugc-clis/logc/actions/runs/43697941563.
 This documentation-only follow-up records the confirmed remote result.
 Website source is published; the existing TLS mismatch still prevents
 confirming a live deployment.
+
+## 2026-11-17 — Optional static Bash completion
+
+### PM scenario and selection
+
+An operator moving between file search, watch and Docker should not need to
+memorize every command's flags during an incident. The PM selected the existing
+shell-completion backlog, limited to Bash 3.2+ and static suggestions rather
+than dynamic log/source discovery. This is a new optional convenience, not a
+repair to search semantics: the baseline interpreted `completion bash` as a
+normal search and produced no script.
+
+The original checkout was clean at `4d7ccab`, matched origin/main and had a
+passing CI matrix. Homebrew issue #2 remains open and no open PRs were listed.
+Separate PM, Staff Go engineering and independent QA agents worked with disjoint
+write scopes in an isolated clone under an exclusive iteration lock.
+
+### Shipped behavior and limits
+
+- `logc completion bash` prints a deterministic script before loading config.
+  Enable it explicitly with `source <(logc completion bash)` in Bash; no startup
+  file is edited. Missing/unsupported shells or extra arguments return 2;
+  completion help returns 0 and output write failures return 1.
+- Tab offers static commands, subcommands and command-specific flags, with
+  native filename fallback. Only the literal first argument selects a command
+  mode; option values and a completed `--` suppress inappropriate suggestions.
+  Docker split equals/colon value fragments are covered by synthetic regressions.
+- Tab uses Bash built-ins, not logc, Docker, journalctl or discovery commands.
+  Native filename fallback still reads the local directory. No dynamic group,
+  module, container, process or port enumeration, other shells or dependencies
+  were added. Existing log readers and follow/rotation logic are unchanged.
+- `completion` is newly reserved as a first-word command. README documents
+  `logc ./completion` and `logc -- completion` target escapes; CLI regressions
+  verify escaped searches. README and landing-page command guide now describe
+  activation and limitations. Homebrew remains explicitly under construction.
+
+### Verification and publication
+
+Coordinator completion race tests (2.154 seconds), full race suite (21.987
+seconds), vet, unique-path build, formatting and diff checks passed locally on
+macOS arm64/Go 1.22.2. A generated-script smoke passed Bash syntax checking,
+activation and watch flag selection with an unavailable config path. Tests also
+cover invalid configuration, output failures, caller IFS preservation, flag
+scope, value suppression, `--`, and reserved-target escapes.
+
+Independent QA exercised real Bash 3.2.57 PTY Tab completion for paths with
+spaces and shell-special characters, native fallback after `--`, config
+subcommands, and watch/Docker isolation. A malicious-looking filename remained
+escaped and inert; external-command traps were untouched. Generation with an
+unread FIFO config did not block. Source was silent and preserved unrelated
+completion registrations and tested shell settings. QA found a synthetic
+split-colon value issue; engineering added a failing reproduction and fixed
+value continuation before publication. Host PTY did not itself split these
+values; remote Linux coverage is a separate CI result. Final independent QA
+retested split-value continuation, 168 value positions under `set -u`, real PTY
+paths, command scope and documentation, then passed its full race/vet/build
+checks with no remaining blocking findings.
+
+Browser screenshots verified the new card in the normal desktop light/dark
+layout. DOM checks found no horizontal overflow at an effective 390 px mobile
+viewport in either theme, and no broken internal anchors; project links point
+to debugc-clis/logc. Mobile viewport screenshots returned a blank capture despite
+the card's visible DOM bounds, so mobile visual verification is incomplete.
+Temporary viewport/theme changes were restored and the test tab was closed.
+`https://logc.com/` still fails certificate hostname verification (curl 60).
+No TLS bypass or production configuration changes were made. Commit, push and
+remote CI results are recorded below after publication.
+
+Next priorities: verified Homebrew distribution (issue #2), tagged binary
+release validation, and manual pages/other-shell completion based on demand.
+Keep dynamic source completion out of the default Tab path unless its cost and
+privacy behavior are explicitly designed and tested.
