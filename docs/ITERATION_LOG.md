@@ -858,3 +858,12 @@ Next priorities: verified Homebrew distribution (issue #2), tagged binary
 release validation, and manual pages/other-shell completion based on demand.
 Keep dynamic source completion out of the default Tab path unless its cost and
 privacy behavior are explicitly designed and tested.
+
+Implementation commit `181cc84` was normally pushed to origin/main and the
+original clean main checkout was fast-forwarded to it. The complete four-job
+Ubuntu/macOS Intel, Go 1.22/stable CI matrix passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/44053598109.
+This includes the generated Bash regression suite on Linux; it is not a claim
+of Linux interactive PTY testing. This documentation-only follow-up records the
+confirmed result. Website source is published, but the TLS mismatch prevents
+confirming a live deployment.
