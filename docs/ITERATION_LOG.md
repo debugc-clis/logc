@@ -938,3 +938,11 @@ Next priorities: review unknown configuration sections and explicitly empty
 `--since` values with compatibility tests; validate Homebrew distribution and
 tagged binary releases. Output-write failure propagation is another separate
 review candidate, not part of this source-resolution fix.
+
+Implementation commit `d2a883b` was normally pushed to origin/main and the clean
+original main checkout was fast-forwarded to it. The complete four-job Ubuntu
+and macOS Intel, Go 1.22/stable CI matrix passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/44493702452.
+This documentation-only follow-up records that confirmed result. Repository
+website source is pushed; live deployment is still unconfirmed because of the
+existing certificate hostname mismatch.
