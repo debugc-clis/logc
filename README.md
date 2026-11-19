@@ -125,6 +125,7 @@ that name, use `logc ./completion` or `logc -- completion` instead.
 
 ## Recent Improvements
 
+- **Explicit searches validate every source:** with a nonempty `-m` / `--match` expression, unresolved positional selectors fail before searching or following instead of silently searching only the valid subset.
 - **Optional Bash completion:** `logc completion bash` prints a Bash 3.2-compatible script for command and flag completion, without starting log discovery or external services.
 - **Safer large context requests:** file searches grow before-context storage only as rows are read, rather than reserving the entire requested `-C` window up front. Snapshot context bounds also avoid integer overflow that could hide matching rows.
 - **Search failures are visible to scripts:** file searches return exit code 1 if any selected file cannot be fully read, while preserving readable results from every attempted source. An incomplete initial search does not silently start live follow.
@@ -220,6 +221,22 @@ logc api ERROR
 logc api 'timeout|connection reset'
 logc nginx ' 5[0-9][0-9] '
 ```
+
+For an unambiguous search across several sources, provide the expression with
+`-m` (or `--match`):
+
+```bash
+logc /srv/api/app.log /srv/worker/worker.log -m ERROR --since 30m
+```
+
+With a nonempty explicit expression, all positional arguments are source
+selectors. If one cannot be resolved, logc exits 1 before printing search rows
+or starting follow; it does not silently search only the valid subset. For
+example, adding an invalid selector such as `:99999` fails even if the first
+file is valid. Underlying empty-group and unmatched-glob resolution rules are
+unchanged, but a token they leave unconsumed now fails the whole explicit search.
+This is source-selector validation, not a guarantee that every source has logs.
+The implicit `logc api ERROR` form still works as before.
 
 Searches include active logs, rotated files such as `.1`, and gzip files such as `.2.gz`. By default, candidates are limited to recently modified files.
 

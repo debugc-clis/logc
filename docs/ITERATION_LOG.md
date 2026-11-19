@@ -867,3 +867,74 @@ This includes the generated Bash regression suite on Linux; it is not a claim
 of Linux interactive PTY testing. This documentation-only follow-up records the
 confirmed result. Website source is published, but the TLS mismatch prevents
 confirming a live deployment.
+
+## 2026-11-19 — Do not silently omit explicit search sources
+
+### PM scenario and reproduced gap
+
+During a cross-service incident, an operator supplies several targets and one
+explicit `-m ERROR` expression. The original CLI accepted an existing temporary
+file followed by invalid `:99999`, printed that file's rows, and returned 0.
+`interpretPositionals` discarded the consumed-target count, so a failed later
+selector could be mistaken for a complete search across all requested sources.
+The coordinator and PM independently reproduced this using isolated fixtures.
+
+The clean main checkout and origin/main were at `43f9e23`; both the previous
+feature and documentation CI runs passed. Issue #2 (Homebrew) remains open;
+no open PRs were listed. A separate PM ranked this correctness issue ahead of
+configuration-section typo handling and explicitly empty time-window arguments.
+Staff Go engineering and independent QA used disjoint write scopes in an
+isolated clone with an exclusive iteration lock.
+
+### Implemented behavior and boundaries
+
+- With a nonempty `-m` / `--match` expression, require the positional source
+  resolver to consume every token. A rejected later selector now returns 1
+  before printing search rows or starting live follow, including JSON mode.
+  The diagnostic identifies the selector rather than reporting success for a
+  silently reduced source set.
+- Preserve implicit positional expressions, multiple valid sources, no-target
+  default discovery, source filters and active/history selection. This is not
+  stricter file-existence validation: underlying empty-group, unmatched-glob and
+  missing-literal-path resolution rules are unchanged, but an unconsumed empty
+  target in a combination now fails instead of being ignored. Empty match values
+  retain their previous interpretation. Watch already checks consumed targets;
+  its behavior is unchanged.
+- No new flags, dependencies, log writes, streaming buffers or rotation changes.
+  README and the landing search example explain the explicit-source contract
+  and demonstrate a two-file recent search. Homebrew stays under construction.
+
+### Verification and publication
+
+Coordinator targeted race tests passed (2.320 seconds), then the full race suite
+(23.360 seconds), vet, unique-path build, Go formatting and diff checks passed
+on macOS arm64/Go 1.22.2. The actual original reproduction now exits 1 with
+empty stdout and a diagnostic naming `:99999`; a valid two-file JSON smoke
+returns both rows and exit 0. Regression cases cover rejected first/middle/last
+selectors, both match spellings, terminal/JSON, all/current/follow modes,
+valid/default/implicit searches and preserved empty-source semantics.
+
+Desktop screenshots verified the updated search card in light/dark modes.
+At an effective 390 px mobile viewport the DOM had no horizontal overflow in
+either theme; internal anchor checks passed and project links use the correct
+repository. Mobile screenshot capture again returned blank despite valid DOM
+bounds, so full mobile visual verification is not claimed. Viewport/theme were
+restored and the owned test tab closed. The existing `https://logc.com/`
+certificate hostname mismatch persists (curl 60); no TLS bypass or production
+infrastructure changes were made. Independent review and publication results
+are recorded below after completion.
+
+Independent QA passed 72 isolated CLI failure cases and reviewed 22 compatibility
+comparisons: 20 retained baseline behavior, and two previously ignored trailing
+empty sources now correctly fail. It passed final targeted race tests, vet,
+build, formatting and diff checks with no blocking code findings. Its request
+to clarify the empty-source documentation was incorporated. Journald source
+combinations were statically reviewed, not exercised against a real service.
+After all engineering edits stopped, coordinator repeated uncached targeted
+race tests (2.002 seconds), full race tests (22.919 seconds), vet, build,
+formatting and diff checks successfully, and fetched unchanged origin/main.
+
+Next priorities: review unknown configuration sections and explicitly empty
+`--since` values with compatibility tests; validate Homebrew distribution and
+tagged binary releases. Output-write failure propagation is another separate
+review candidate, not part of this source-resolution fix.

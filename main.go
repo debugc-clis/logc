@@ -438,9 +438,12 @@ func interpretPositionals(cfg Config, pos []string, explicitMatch string, includ
 			r, err := resolveDefaultTarget(cfg, includeHistory, cutoff, filters...)
 			return r, explicitMatch, err
 		}
-		r, _, err := resolveLeadingTargets(cfg, pos, includeHistory)
+		r, consumed, err := resolveLeadingTargets(cfg, pos, includeHistory)
 		if err != nil {
 			return ResolvedTarget{}, "", err
+		}
+		if consumed != len(pos) {
+			return ResolvedTarget{}, "", fmt.Errorf("cannot combine or resolve log source %q with explicit --match", pos[consumed])
 		}
 		return r, explicitMatch, nil
 	}
