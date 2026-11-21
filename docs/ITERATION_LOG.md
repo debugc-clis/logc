@@ -1005,3 +1005,11 @@ publication, CI and confirmed live deployment remain separate outcomes.
 
 Next priorities: compatibility-reviewed unknown configuration sections,
 validated Homebrew/tagged binary installation, and output-write failure status.
+
+Implementation `6c96092` was normally pushed to origin/main; the original clean
+main checkout was fast-forwarded to it. All four Ubuntu/macOS Intel and Go
+1.22/stable CI jobs passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/44888155972.
+This documentation-only follow-up records the confirmed remote result. The
+website source is published, but live deployment remains unconfirmed due to
+the existing certificate mismatch.
