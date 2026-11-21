@@ -126,6 +126,9 @@ func parseCLI(args []string, cfg Config) (cliOptions, error) {
 			if err != nil {
 				return o, err
 			}
+			if v == "" {
+				return o, fmt.Errorf("invalid --since %q", v)
+			}
 			o.SinceRaw = v
 		case "-C", "--context":
 			v, err := next()

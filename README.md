@@ -125,6 +125,7 @@ that name, use `logc ./completion` or `logc -- completion` instead.
 
 ## Recent Improvements
 
+- **Empty time windows fail early:** an explicit `--since ''` returns exit code 2 instead of silently behaving as if the option were omitted. This also catches empty shell variables in file, watch and system commands; Docker keeps its native argument handling.
 - **Explicit searches validate every source:** with a nonempty `-m` / `--match` expression, unresolved positional selectors fail before searching or following instead of silently searching only the valid subset.
 - **Optional Bash completion:** `logc completion bash` prints a Bash 3.2-compatible script for command and flag completion, without starting log discovery or external services.
 - **Safer large context requests:** file searches grow before-context storage only as rows are read, rather than reserving the entire requested `-C` window up front. Snapshot context bounds also avoid integer overflow that could hide matching rows.
@@ -250,6 +251,10 @@ Relative `--since` windows must be positive and representable (at least 1 ns and
 less than roughly 292 years). Fractional days and weeks work: `0.5d` means
 12 hours and `1.5w` means 10.5 days. Zero, negative, nonfinite and overflowing
 windows are rejected with exit code 2; use `--since 1d`, not `--since -1d`.
+An explicitly empty value (`--since ''`, including an empty shell variable) is
+also rejected before searching or following. Check that `WINDOW` is set before
+running `logc api ERROR --since "$WINDOW"`; omitting `--since` still uses the
+normal defaults. An empty occurrence cannot be hidden by a later valid value.
 `today`, local dates (`2026-08-08`), quoted local date-times
 (`"2026-08-08 13:00:00"`) and RFC3339 timestamps remain supported. These rules
 apply to file search, watch and system logs; `logc docker --since` is forwarded

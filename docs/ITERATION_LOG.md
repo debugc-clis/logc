@@ -946,3 +946,62 @@ https://github.com/debugc-clis/logc/actions/runs/44493702452.
 This documentation-only follow-up records that confirmed result. Repository
 website source is pushed; live deployment is still unconfirmed because of the
 existing certificate hostname mismatch.
+
+## 2026-11-21 — Reject explicitly empty time windows
+
+### PM scenario and selection
+
+An incident script supplies `--since "$WINDOW"`, but WINDOW is empty. The
+baseline accepted the empty argument as an omitted option: an isolated file
+search printed rows and returned 0. Without an expression, that same loss of
+intent can select default follow mode. The PM chose this bounded correctness
+fix ahead of unknown config sections, distribution work and output-write status.
+
+Main was clean at `3fe54ea` and matched origin/main; both previous CI runs were
+green. Homebrew issue #2 remains open and no open PRs were listed. Separate PM,
+Staff Go engineering and independent QA roles used an isolated clone and an
+exclusive iteration lock; coordinator owned the documentation changes.
+
+### Behavior and boundaries
+
+- The shared CLI parser rejects an explicit empty `--since` at that occurrence,
+  before assigning its value. Ordinary, watch and system commands exit 2 with
+  `invalid --since ""`, without emitting log rows or starting follow/producers.
+  A later valid occurrence cannot hide an earlier empty one.
+- Omitted options, valid/repeated-valid windows and missing-value errors retain
+  their contracts. `parseSince("")` still represents an absent window internally.
+  Docker's separate native argument forwarding is unchanged. No new equals
+  syntax, whitespace normalization, flags, dependencies or log-reader changes.
+- README explains empty shell variables and omission; the landing-page option
+  description distinguishes rejection from normal defaults. Homebrew is still
+  explicitly under construction.
+
+### Verification and publication
+
+Engineering reproduced the parser failure before implementing the three-line
+guard. Behavioral tests cover root default/finite/follow/JSON, selectors,
+watch/discovery and system/JSON; empty, empty-then-valid, valid-then-empty and
+missing values; valid controls, the internal absent sentinel and Docker argument
+forwarding. Temporary fixtures and external-command traps avoid real services.
+Final coordinator and independent review results are recorded below.
+
+Coordinator uncached targeted race tests (1.608 seconds), full race tests
+(22.873 seconds), vet, unique-path build, formatting and diff checks passed
+locally on Go 1.22.2/macOS arm64. The baseline CLI reproduction now returns 2
+with empty stdout and the exact diagnostic; a valid one-hour JSON control
+still returns the isolated matching row. Independent QA passed 40 negative CLI
+cases and 10 fake-Docker comparisons, including repetition orders and native
+equals forwarding, then passed its uncached full race/vet/build checks. It
+found no blocking issues and confirmed documentation accuracy. Real live
+watch/system producers were not exercised; no streaming code changed.
+
+Static HTML parsing verified internal anchor targets, repository links, the
+Homebrew notice and new wording. The browser connection was unavailable, so
+desktop/mobile and light/dark visual verification could not run this cycle;
+only prose changed, with no layout/style edits. The owned local server stopped.
+`https://logc.com/` still fails certificate hostname verification (curl 60).
+No TLS bypass or production infrastructure changes were attempted. Source
+publication, CI and confirmed live deployment remain separate outcomes.
+
+Next priorities: compatibility-reviewed unknown configuration sections,
+validated Homebrew/tagged binary installation, and output-write failure status.
