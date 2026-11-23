@@ -1077,3 +1077,11 @@ deployment are tracked separately.
 Next priorities: reproduce/audit output-write failure status; validate Homebrew
 and tagged binary installation. Do not expand section validation into a new
 configuration format without compatibility evidence.
+
+Implementation `222b31c` was normally pushed to origin/main and the original
+clean main checkout fast-forwarded. All four Ubuntu/macOS Intel and Go
+1.22/stable CI jobs passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/45144163865.
+This documentation-only follow-up records the confirmed remote result. The
+landing-page source is pushed; certificate failure still prevents confirming
+the live deployment.
