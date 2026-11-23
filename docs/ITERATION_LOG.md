@@ -1013,3 +1013,67 @@ https://github.com/debugc-clis/logc/actions/runs/44888155972.
 This documentation-only follow-up records the confirmed remote result. The
 website source is published, but live deployment remains unconfirmed due to
 the existing certificate mismatch.
+
+## 2026-11-23 — Reject unknown nonempty configuration sections
+
+### PM scenario and compatibility decision
+
+An operator mistypes `[group.api]` as `[grop.api]`. The baseline silently left
+group context and applied following global keys: a temporary config with that
+header and `lines=3` returned 0 from `config show`, displaying global `lines=3`.
+Coordinator reproduced this without production logs or services. The PM chose
+header validation ahead of output-write status and distribution publication.
+
+The checkout was clean at `78bd7c1`, matched origin/main, and both prior CI runs
+passed. Homebrew issue #2 remains open and no open PRs were listed. Separate PM,
+Staff Go engineering and independent QA roles used disjoint write scopes in an
+isolated clone under an exclusive iteration lock.
+
+### Selected behavior and limits
+
+- Reject unknown nonempty headers at the header itself with config path, line
+  and section name. Documented source sections remain `[group.NAME]`; no bare
+  group names or `[global]` / `[default]` aliases are introduced. Those formerly
+  silent fallbacks now fail deliberately, so README includes migration steps.
+- Preserve the existing empty `[]` / `[   ]` header as a leave-group operation,
+  not a default reset or group deletion. Global keys can instead be placed
+  before groups. Flat `group.NAME=PATH`, existing group names, repeated paths,
+  metadata and global-key fallback inside valid groups remain supported.
+  `[group.]` retains its existing empty-name error. Key-placement validation and
+  malformed-header grammar are not broadened in this patch.
+- Commands retain their existing config-error exit statuses; no partial config
+  is printed or used after rejection. No dependency, log access, streaming,
+  rotation or production infrastructure changes. README and the landing config
+  description explain rejection and migration; Homebrew stays under construction.
+
+### Evidence and publication
+
+Implementation and independent QA results are recorded below after final checks.
+Engineering first confirmed the new unknown-header regressions failed on the
+baseline, then added a two-line guard. Tests cover header location/name,
+empty-name errors, mixed flat/group forms, metadata/repeated paths, current
+group-name grammar, blank resets, global-key fallback, missing-config defaults,
+generated config and actual command statuses with isolated PATH/log fixtures.
+Coordinator uncached targeted race tests (1.396 seconds), full race tests
+(23.720 seconds), vet, unique-path build, formatting and diff checks passed on
+Go 1.22.2/macOS arm64. The original config-show reproduction now exits 1 with
+empty stdout and the exact path/line/section diagnostic. A valid group plus
+`[]` still retains that group's path and applies `lines=3` globally.
+Independent QA passed 66 rejected CLI cases with producer traps untouched and
+no sentinel log output. Eight accepted configs retained byte-identical baseline
+effective output and stable effective-config roundtrips. It verified config
+path recovery still works, generated/missing configs and both blank reset forms,
+then passed uncached full race tests (23.538 seconds), vet, build, formatting
+and diff checks. README/page migration text matched behavior; no blocking
+findings remained. These are local macOS results, not yet Linux CI evidence.
+Browser connection remained unavailable, so desktop/mobile and light/dark visual
+checks could not run. Static HTML parsing passed internal-anchor, GitHub-link,
+Homebrew-notice and config-wording assertions. Only prose changed in the page;
+no style/layout edits. The owned temporary server was stopped. The existing
+`https://logc.com/` certificate hostname mismatch persists; no validation bypass
+or production changes were attempted. Source publication, remote CI and live
+deployment are tracked separately.
+
+Next priorities: reproduce/audit output-write failure status; validate Homebrew
+and tagged binary installation. Do not expand section validation into a new
+configuration format without compatibility evidence.

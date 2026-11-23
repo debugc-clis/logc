@@ -207,6 +207,8 @@ func loadConfig() (Config, error) {
 				if sectionGroup == "" {
 					return cfg, fmt.Errorf("%s:%d: empty group name", p, lineNo)
 				}
+			} else if section != "" {
+				return cfg, fmt.Errorf("%s:%d: unknown section %q", p, lineNo, section)
 			}
 			continue
 		}

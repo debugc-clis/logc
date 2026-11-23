@@ -125,6 +125,7 @@ that name, use `logc ./completion` or `logc -- completion` instead.
 
 ## Recent Improvements
 
+- **Configuration section mistakes fail early:** unknown nonempty headers such as `[grop.api]` now report the configuration path and line instead of silently treating following settings as global. Use `[group.api]` for a source, not `[api]`.
 - **Empty time windows fail early:** an explicit `--since ''` returns exit code 2 instead of silently behaving as if the option were omitted. This also catches empty shell variables in file, watch and system commands; Docker keeps its native argument handling.
 - **Explicit searches validate every source:** with a nonempty `-m` / `--match` expression, unresolved positional selectors fail before searching or following instead of silently searching only the valid subset.
 - **Optional Bash completion:** `logc completion bash` prints a Bash 3.2-compatible script for command and flag completion, without starting log discovery or external services.
@@ -476,7 +477,15 @@ category=app
 module=api
 ```
 
-Custom source sections use `[group.NAME]`; a bare section such as `[api]` is not interpreted as a source group.
+Custom source sections use `[group.NAME]`; unknown nonempty sections such as
+`[api]`, `[global]`, `[default]` or a misspelled `[grop.api]` are rejected at
+the header with the configuration path and line number. Previously those
+headers silently switched to global settings; correct them before upgrading.
+Use `[group.api]` for a source. For global settings, remove `[global]` / `[default]`
+and put the keys before the groups, or use the existing empty header `[]` to
+leave a group. `[]` (also `[   ]`) does not delete groups or restore defaults.
+Flat `group.NAME=PATH` entries and global keys inside valid group sections
+remain supported. This change does not add bare-name group aliases.
 
 ### Overlapping source groups
 
