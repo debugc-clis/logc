@@ -1157,3 +1157,11 @@ remained unchanged before publication.
 Next priorities: extend output-failure lifecycle handling to live readers in a
 separate validated scope, then installation/distribution verification. Do not
 describe finite-search protection as an all-command output guarantee.
+
+Implementation `3fdccb9` was normally pushed to origin/main and the original
+clean main checkout fast-forwarded. All four Ubuntu/macOS Intel and Go
+1.22/stable CI jobs passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/45646036148.
+This documentation-only follow-up records the confirmed result, including
+Linux FIFO/pipe regressions. Landing-page source is pushed; the existing TLS
+mismatch still prevents confirming live deployment.
