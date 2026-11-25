@@ -1085,3 +1085,75 @@ https://github.com/debugc-clis/logc/actions/runs/45144163865.
 This documentation-only follow-up records the confirmed remote result. The
 landing-page source is pushed; certificate failure still prevents confirming
 the live deployment.
+
+## 2026-11-25 — Fail visibly when file-search output cannot be written
+
+### PM scenario and reproduction
+
+An SRE exports file/gzip search results, but the destination rejects writes.
+The baseline discarded block-write errors and returned success. Coordinator
+reproduced this portably by giving stdout a read-only descriptor for a temporary
+ordinary file: both terminal and JSON searches with a real match exited 0 and
+printed a successful match count to stderr. No production services were used.
+The PM selected bounded file-search failure propagation rather than a rewrite
+of every command's output lifecycle.
+
+The original main checkout was clean at `cb759e8`, matched origin/main, and both
+previous CI runs passed. Homebrew issue #2 remains open; no open PRs were listed.
+Separate PM, Staff Go engineering and independent QA roles used disjoint scopes
+in an isolated clone under an exclusive iteration lock.
+
+### Implemented behavior and limits
+
+- A detected stdout error while emitting a file-search block must stop current
+  scan delivery and later sources, preserve the write-error cause, and return
+  1 without claiming a complete count. Input-read failures keep their existing
+  partial-prefix/continue-other-files contract while output remains healthy.
+- Failed historical search must not enter follow or recommend `--current` as
+  a repair for the output destination. Shared system historical-file searches
+  inherit this guard; live follow, watch, journald, Docker and other commands'
+  output status are separate follow-up work. OS SIGPIPE handling is unchanged.
+- Already emitted data can be partial, including a truncated last JSON block.
+  No promise of atomic export, durable storage, zero scanner/gzip prefetch or
+  universal write-failure detection. No dependencies or log writes are added.
+  README/page explain the distinction and README includes a recent JSON export
+  example. Homebrew remains explicitly under construction.
+
+### Verification and publication
+
+Implementation, independent review and final validation results are recorded
+below after completion. Static HTML checks passed internal anchors, project
+links, Homebrew notice and the scoped output-failure wording. Browser launch
+was blocked by an existing occupied DevTools profile; no user browser was
+terminated or profile changed. Desktop/mobile and light/dark visual checks
+are therefore not claimed. Only page prose changed, with no styles/layout edits;
+the owned local server was stopped. `https://logc.com/` still fails certificate
+hostname verification (curl 60); no TLS bypass or production changes were made.
+Repository source publication, CI and live deployment remain separate outcomes.
+
+Engineering retained tests for initial/header/line/JSON errors, short writes,
+middle/final/dedup batch failures, callback abort, FIFO-proven reader closure
+and later-source avoidance, read/write error priority, historical system-file
+bootstrap and eight real CLI read-only-stdout cases. Healthy and closed-pipe
+subprocesses check default SIGPIPE behavior. A coordinator test refinement adds
+a five-second bootstrap context deadline to prevent a regression hanging tests.
+
+Independent QA reproduced the baseline and passed the eight final CLI cases,
+extra writer/context/separator checks, plain/gzip descriptor cleanup and both
+system historical windows. It verified read-error continuation, zero matches,
+underlying error preservation, no writes after failure and no misleading retry
+hint or complete count. Its uncached full race suite passed in 25.427 seconds;
+normal vet, build, formatting and diff checks also passed. Extra temporary
+overlay tests ran under race separately; their Go 1.22 virtual-file vet issue
+was bypassed only for that overlay, not for repository vet. Documentation and
+the redirect example matched tested behavior; no blocking findings remained.
+After review and the bounded-test refinement, coordinator uncached targeted
+race tests (1.698 seconds), full race tests (26.061 seconds), vet, unique-path
+build, formatting and diff checks all passed on macOS arm64/Go 1.22.2. The
+eight portable read-only-stdout smoke cases also returned 1 with output causes,
+no successful totals and no archive retry hints. Origin/main was fetched and
+remained unchanged before publication.
+
+Next priorities: extend output-failure lifecycle handling to live readers in a
+separate validated scope, then installation/distribution verification. Do not
+describe finite-search protection as an all-command output guarantee.

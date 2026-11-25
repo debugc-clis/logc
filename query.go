@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -181,6 +182,22 @@ func parseTimePrefixAt(s string, now time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+type searchOutputError struct {
+	path string
+	err  error
+}
+
+func (err *searchOutputError) Error() string {
+	return fmt.Sprintf("search output for %s: %v", err.path, err.err)
+}
+
+func (err *searchOutputError) Unwrap() error { return err.err }
+
+func isSearchOutputError(err error) bool {
+	var outputErr *searchOutputError
+	return errors.As(err, &outputErr)
+}
+
 func searchPaths(paths []string, q Query, out *printer) (int, error) {
 	const maxBatchRows = 256
 	const maxBatchBytes = 1024 * 1024
@@ -190,65 +207,83 @@ func searchPaths(paths []string, q Query, out *printer) (int, error) {
 		selected := make([]string, 0, maxBatchRows)
 		selectedBytes := 0
 		emitted := false
-		flush := func(suffix string) {
+		flush := func(suffix string) error {
 			if len(selected) == 0 {
-				return
+				return nil
 			}
-			out.block(path, selected, suffix)
+			if err := out.block(path, selected, suffix); err != nil {
+				return &searchOutputError{path: path, err: err}
+			}
 			for index := range selected {
 				selected[index] = ""
 			}
 			selected = selected[:0]
 			selectedBytes = 0
 			emitted = true
+			return nil
 		}
-		appendLine := func(line string) {
+		appendLine := func(line string) error {
 			if len(selected) > 0 && (len(selected) == maxBatchRows || selectedBytes+len(line) > maxBatchBytes) {
-				flush("search continues")
+				if err := flush("search continues"); err != nil {
+					return err
+				}
 			}
 			selected = append(selected, line)
 			selectedBytes += len(line)
+			return nil
 		}
 		previous := ""
 		repeats := 0
-		flushRun := func() {
+		flushRun := func() error {
 			if repeats == 0 {
-				return
+				return nil
 			}
 			line := previous
 			if repeats > 1 {
 				line = fmt.Sprintf("%s  × %d", previous, repeats)
 			}
-			appendLine(line)
+			if err := appendLine(line); err != nil {
+				return err
+			}
 			previous = ""
 			repeats = 0
+			return nil
 		}
-		matches, err := scanLogPathEach(path, q, func(line string) {
+		matches, err := scanLogPathEachErr(path, q, func(line string) error {
 			if !q.Dedup {
-				appendLine(line)
-				return
+				return appendLine(line)
 			}
 			if repeats > 0 && previous == line {
 				repeats++
-				return
+				return nil
 			}
-			flushRun()
+			if err := flushRun(); err != nil {
+				return err
+			}
 			previous = line
 			repeats = 1
+			return nil
 		})
-		flushRun()
+		total += matches
+		if isSearchOutputError(err) {
+			return total, err
+		}
+		if outputErr := flushRun(); outputErr != nil {
+			return total, outputErr
+		}
 		suffix := fmt.Sprintf("%d matches", matches)
 		if err != nil {
 			suffix += " before read error"
 		} else if emitted {
 			suffix += " total"
 		}
-		flush(suffix)
+		if outputErr := flush(suffix); outputErr != nil {
+			return total, outputErr
+		}
 		if err != nil {
 			failures++
 			out.errorf("%s: %v", path, err)
 		}
-		total += matches
 	}
 	if failures > 0 {
 		return total, fmt.Errorf("search incomplete: failed to read %d of %d files", failures, len(paths))
@@ -271,6 +306,13 @@ func scanLogPath(path string, q Query) ([]string, int, error) {
 }
 
 func scanLogPathEach(path string, q Query, emit func(string)) (int, error) {
+	return scanLogPathEachErr(path, q, func(line string) error {
+		emit(line)
+		return nil
+	})
+}
+
+func scanLogPathEachErr(path string, q Query, emit func(string) error) (int, error) {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		return 0, err
@@ -283,7 +325,10 @@ func scanLogPathEach(path string, q Query, emit func(string)) (int, error) {
 		return 0, err
 	}
 	defer reader.Close()
+	return scanLogReaderEach(reader, fileInfo.ModTime(), q, emit)
+}
 
+func scanLogReaderEach(reader io.Reader, modTime time.Time, q Query, emit func(string) error) (int, error) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 64*1024), maxCarryBytes)
 	var before []indexedLogLine
@@ -292,36 +337,49 @@ func scanLogPathEach(path string, q Query, emit func(string)) (int, error) {
 	matches := 0
 	lineIndex := 0
 
-	appendSelected := func(line indexedLogLine) {
+	appendSelected := func(line indexedLogLine) error {
 		if !line.eligible || line.index <= lastSelected {
-			return
+			return nil
 		}
 		if lastSelected >= 0 && line.index > lastSelected+1 {
-			emit("--")
+			if err := emit("--"); err != nil {
+				return err
+			}
 		}
-		emit(line.text)
+		if err := emit(line.text); err != nil {
+			return err
+		}
 		lastSelected = line.index
+		return nil
 	}
 
 	for scanner.Scan() {
 		text := strings.TrimSuffix(scanner.Text(), "\r")
-		line := indexedLogLine{index: lineIndex, text: text, eligible: lineEligible(text, fileInfo.ModTime(), q)}
+		line := indexedLogLine{index: lineIndex, text: text, eligible: lineEligible(text, modTime, q)}
 		matched := line.eligible && q.match(text)
 
 		if q.Regex == nil {
 			if line.eligible {
-				appendSelected(line)
 				matches++
+				if err := appendSelected(line); err != nil {
+					return matches, err
+				}
 			}
 		} else if matched {
 			matches++
 			for _, previous := range before {
-				appendSelected(previous)
+				if err := appendSelected(previous); err != nil {
+					return matches, err
+				}
 			}
-			appendSelected(line)
+			if err := appendSelected(line); err != nil {
+				return matches, err
+			}
 			afterRemaining = q.After
 		} else if afterRemaining > 0 {
-			appendSelected(line)
+			if err := appendSelected(line); err != nil {
+				return matches, err
+			}
 			afterRemaining--
 		}
 

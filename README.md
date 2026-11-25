@@ -125,6 +125,7 @@ that name, use `logc ./completion` or `logc -- completion` instead.
 
 ## Recent Improvements
 
+- **Search exports fail visibly:** detected stdout write failures abort file/gzip searches with exit code 1 instead of reporting success. The failed search does not proceed into follow; partial output must not be treated as a complete export.
 - **Configuration section mistakes fail early:** unknown nonempty headers such as `[grop.api]` now report the configuration path and line instead of silently treating following settings as global. Use `[group.api]` for a source, not `[api]`.
 - **Empty time windows fail early:** an explicit `--since ''` returns exit code 2 instead of silently behaving as if the option were omitted. This also catches empty shell variables in file, watch and system commands; Docker keeps its native argument handling.
 - **Explicit searches validate every source:** with a nonempty `-m` / `--match` expression, unresolved positional selectors fail before searching or following instead of silently searching only the valid subset.
@@ -289,13 +290,35 @@ direct matches before context and deduplication. If reading fails, already
 selected results remain visible; the final nonempty block says
 `N matches before read error` and stderr reports the cause. Such counts cover
 only the readable prefix. File searches return **0** when all selected files
-are searched without a read failure (including zero matches), and **1** when
+are searched without a read or result-write failure (including zero matches), and **1** when
 any selected file cannot be fully read. Other selected files are still attempted,
-and their matches are retained. Invalid CLI arguments remain exit code **2**.
+and their matches are retained while output remains healthy. Invalid CLI arguments remain exit code **2**.
 The status contract is the same for terminal and JSON output; diagnostics stay
 on stderr. Unlike grep, a successful search with no matches is not a failure.
 When piping output through another command in Bash or zsh, use
 `set -o pipefail` if the pipeline must retain logc's nonzero status.
+
+**Output failures are different from source read failures.** If stdout rejects
+a file/gzip search result, logc stops the search immediately, skips later files
+and exits **1** with an output diagnostic. It does not print a successful total
+or start follow after that failed search. Already written output can be partial;
+the last JSON block may be truncated. Fix the output destination rather than
+using `--current`, which only skips historical sources. Normal OS `SIGPIPE`
+behavior for a closed downstream pipe is unchanged and may terminate the
+process instead of returning 1; keep `pipefail` enabled when checking a pipeline.
+
+For example, export a recent file search and check its exit status before
+treating the destination as complete:
+
+```bash
+logc /srv/api/app.log -m ERROR --since 30m --json > incident.jsonl
+```
+
+This protection covers file-search result blocks, including `logc system`'s
+traditional-file historical search with `--since` or `--all` (not journald).
+It is not a guarantee for ordinary live tail/follow,
+watch, journald, Docker or every other command's output. It also does not make
+exports atomic or guarantee data has reached durable storage.
 
 ### 3. Search, then follow
 
@@ -307,9 +330,10 @@ logc api 'timeout|reset' --since 30m -f
 
 This is useful when you need immediate context before waiting for the next occurrence.
 
-If any file fails during the initial search, logc finishes attempting the other
+If any file has a read failure during the initial search, logc finishes attempting the other
 selected files, reports the incomplete search and exits 1 **without starting
-live follow**. If only rotated/compressed history is damaged, explicitly skip
+live follow**. An output write failure instead stops immediately, also without
+starting follow. If only rotated/compressed history is damaged, explicitly skip
 that history and retry against the active directory or source:
 
 ```bash

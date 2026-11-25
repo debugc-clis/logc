@@ -365,11 +365,13 @@ func realMain() int {
 	if searchMode {
 		sortRecentFirst(paths)
 		matches, err := searchPaths(paths, q, out)
-		if q.Regex != nil {
+		if q.Regex != nil && !isSearchOutputError(err) {
 			out.infof("%d matching lines", matches)
 		}
 		if err != nil {
-			if opts.Follow {
+			if opts.Follow && isSearchOutputError(err) {
+				out.errorf("historical search incomplete; live follow not started: %v", err)
+			} else if opts.Follow {
 				out.errorf("historical search incomplete; live follow not started: %v; retry a directory or active-file target with --current to skip broken archives (does not repair them)", err)
 			} else {
 				out.errorf("%v", err)

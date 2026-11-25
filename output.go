@@ -164,13 +164,14 @@ func sanitizeTerminalText(text string) string {
 	return safe.String()
 }
 
-func (p *printer) block(path string, lines []string, suffix string) {
+func (p *printer) block(path string, lines []string, suffix string) error {
+	writer := &blockWriter{writer: p.output()}
 	if p.json {
 		category, module := "", ""
 		if p.sourceMeta != nil {
 			category, module = p.sourceMeta(path)
 		}
-		_ = json.NewEncoder(p.output()).Encode(struct {
+		err := json.NewEncoder(writer).Encode(struct {
 			Path      string   `json:"path"`
 			Category  string   `json:"category,omitempty"`
 			Module    string   `json:"module,omitempty"`
@@ -179,22 +180,43 @@ func (p *printer) block(path string, lines []string, suffix string) {
 			Suffix    string   `json:"suffix,omitempty"`
 			Lines     []string `json:"lines"`
 		}{Path: path, Category: category, Module: module, Logrotate: p.logrotate != nil && p.logrotate(path), Time: p.timestamp().Format(time.RFC3339), Suffix: suffix, Lines: lines})
-		return
+		return err
 	}
-	fmt.Fprintln(p.output())
-	fmt.Fprintln(p.output(), p.header(path, suffix))
+	fmt.Fprintln(writer)
+	fmt.Fprintln(writer, p.header(path, suffix))
 	if len(lines) == 0 {
 		if p.color {
-			fmt.Fprintln(p.output(), "  \x1b[2m(empty)\x1b[0m")
+			fmt.Fprintln(writer, "  \x1b[2m(empty)\x1b[0m")
 		} else {
-			fmt.Fprintln(p.output(), "  (empty)")
+			fmt.Fprintln(writer, "  (empty)")
 		}
-		return
+		return writer.err
 	}
 	for _, line := range lines {
 		line = strings.TrimSuffix(line, "\r")
-		fmt.Fprintf(p.output(), "  %s\n", p.decorate(line))
+		fmt.Fprintf(writer, "  %s\n", p.decorate(line))
+		if writer.err != nil {
+			return writer.err
+		}
 	}
+	return writer.err
+}
+
+type blockWriter struct {
+	writer io.Writer
+	err    error
+}
+
+func (writer *blockWriter) Write(data []byte) (int, error) {
+	if writer.err != nil {
+		return 0, writer.err
+	}
+	written, err := writer.writer.Write(data)
+	if err == nil && written < len(data) {
+		err = io.ErrShortWrite
+	}
+	writer.err = err
+	return written, err
 }
 
 func (p *printer) infof(format string, args ...any) {
