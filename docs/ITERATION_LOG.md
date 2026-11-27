@@ -1307,3 +1307,11 @@ and diff checks. These are local macOS/Go 1.22.2 results, not yet Linux CI.
 Next priorities: scope ordinary container/system reader output failures, then
 installation/distribution verification. Do not describe dashboard protection
 as complete external-stream output lifecycle coverage.
+
+Implementation `a93b3bc` was normally pushed to origin/main and the original
+clean main checkout fast-forwarded. All four Ubuntu/macOS Intel and Go
+1.22/stable CI jobs passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/46016142594.
+This documentation-only follow-up records the confirmed result. Landing-page
+source is pushed; the existing certificate mismatch still prevents confirming
+the live deployment.
