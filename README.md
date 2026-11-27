@@ -125,6 +125,7 @@ that name, use `logc ./completion` or `logc -- completion` instead.
 
 ## Recent Improvements
 
+- **Watch stops when its dashboard cannot be written:** detected render failures exit 1, close watched files or stop/reap the local journal reader, and are not hidden by simultaneous cancellation. Normal Ctrl+C behavior remains unchanged.
 - **File followers stop on output failure:** default/targeted file follow, the live phase of search-follow and traditional system-file fallback now exit 1 on a detected stdout write error and close retained files, rather than continuing invisibly. Healthy cancellation still exits normally.
 - **Search exports fail visibly:** detected stdout write failures abort file/gzip searches with exit code 1 instead of reporting success. The failed search does not proceed into follow; partial output must not be treated as a complete export.
 - **Configuration section mistakes fail early:** unknown nonempty headers such as `[grop.api]` now report the configuration path and line instead of silently treating following settings as global. Use `[group.api]` for a source, not `[api]`.
@@ -326,8 +327,9 @@ logc /srv/api/log --json > live.jsonl
 ```
 
 Coverage includes the live phase after a successful file search with `-f` and
-`logc system`'s traditional-file fallback, not journald. It is not a guarantee
-for watch, Docker or every other command's output. It cannot interrupt a write
+`logc system`'s traditional-file fallback, not ordinary journald streams. Watch
+has its own dashboard protection described below. This is not a guarantee
+for Docker or every other command's output. It cannot interrupt a write
 that is already blocked, make exports atomic, or guarantee durable storage.
 
 ### 3. Search, then follow
@@ -352,8 +354,9 @@ logc /srv/api/log ERROR --current -f
 
 `--current` skips history; it does not repair files or bypass errors in active
 logs. The historical bootstrap of the traditional system-file fallback also
-stops before following if its search fails. Plain follow, watch, Docker and
-native journal streams keep their existing behavior.
+stops before following if its search fails. These finite-search read-error rules
+do not change how plain follow, watch, Docker and native journal streams handle
+source-read failures.
 
 To keep watching a log directory across deployments that create new filenames:
 
@@ -389,6 +392,16 @@ logc watch ERROR --category app --module api
 ```
 
 `logc watch` is a terminal dashboard and intentionally does not support `--json` or `--all`.
+
+If stdout rejects a dashboard write, watch exits **1** with an output diagnostic
+instead of continuing without a visible view. This covers the initial view,
+periodic updates and the final view during cancellation. A detected write error
+wins over cancellation; healthy Ctrl+C still renders the final view normally.
+File watch closes retained log files. For systemd-unit watch, logc stops and
+reaps only its local journal reader, not the monitored service. The failed view
+is not retried and can be partial. Normal SIGPIPE handling is unchanged; an
+already-blocked write cannot be interrupted by this check. Ordinary Docker and
+journal log-stream output handling is outside this dashboard guarantee.
 
 ### 5. Stream system logs
 

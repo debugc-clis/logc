@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -410,7 +411,21 @@ func terminalColumns() int {
 	return 120
 }
 
-func (w *alertWatcher) render(out io.Writer, color, clear bool) {
+type watchOutputError struct {
+	Err error
+}
+
+func (err *watchOutputError) Error() string { return "dashboard output: " + err.Err.Error() }
+func (err *watchOutputError) Unwrap() error { return err.Err }
+
+func isWatchOutputError(err error) bool {
+	var outputErr *watchOutputError
+	return errors.As(err, &outputErr)
+}
+
+func (w *alertWatcher) render(out io.Writer, color, clear bool) error {
+	writer := &blockWriter{writer: out}
+	out = writer
 	now := time.Now()
 	alerts, rate := w.tracker.summaries(now)
 	if clear {
@@ -453,6 +468,10 @@ func (w *alertWatcher) render(out io.Writer, color, clear bool) {
 		}
 	}
 	fmt.Fprintln(out, "\nRefreshes every second · Press Ctrl+C to stop")
+	if writer.err != nil {
+		return &watchOutputError{Err: writer.err}
+	}
+	return nil
 }
 
 func formatAlertTime(timestamp time.Time, approximate bool) string {
@@ -463,7 +482,7 @@ func formatAlertTime(timestamp time.Time, approximate bool) string {
 	return formatted
 }
 
-func (w *alertWatcher) run(ctx context.Context, out io.Writer, color, clear bool) {
+func (w *alertWatcher) run(ctx context.Context, out io.Writer, color, clear bool) error {
 	defer func() {
 		for _, state := range w.states {
 			state.close()
@@ -473,7 +492,9 @@ func (w *alertWatcher) run(ctx context.Context, out io.Writer, color, clear bool
 		w.bootstrap()
 	}
 	w.rescan(len(w.bootstrapPaths) == 0)
-	w.render(out, color, clear)
+	if err := w.render(out, color, clear); err != nil {
+		return err
+	}
 	pollTicker := time.NewTicker(250 * time.Millisecond)
 	scanTicker := time.NewTicker(w.cfg.ScanInterval)
 	renderTicker := time.NewTicker(time.Second)
@@ -483,14 +504,15 @@ func (w *alertWatcher) run(ctx context.Context, out io.Writer, color, clear bool
 	for {
 		select {
 		case <-ctx.Done():
-			w.render(out, color, clear)
-			return
+			return w.render(out, color, clear)
 		case <-pollTicker.C:
 			w.poll()
 		case <-scanTicker.C:
 			w.rescan(true)
 		case <-renderTicker.C:
-			w.render(out, color, clear)
+			if err := w.render(out, color, clear); err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -544,7 +566,7 @@ func watchCommand(args []string) int {
 	defer stop()
 	color := newPrinter(cfg.Color).color
 	if resolved.JournalUnit != "" {
-		if err := runJournalAlertWatch(ctx, resolved.JournalUnit, cfg, query, os.Stdout, color, stdoutIsTerminal(), opts.Full); err != nil && ctx.Err() == nil {
+		if err := runJournalAlertWatch(ctx, resolved.JournalUnit, cfg, query, os.Stdout, color, stdoutIsTerminal(), opts.Full); err != nil && (isWatchOutputError(err) || ctx.Err() == nil) {
 			fmt.Fprintln(os.Stderr, "logc watch:", err)
 			return 1
 		}
@@ -563,7 +585,10 @@ func watchCommand(args []string) int {
 	w.defaultDiscovery = resolved.DefaultDiscovery
 	w.categories, w.modules = opts.Categories, opts.Modules
 	w.fullLines = opts.Full
-	w.run(ctx, os.Stdout, color, stdoutIsTerminal())
+	if err := w.run(ctx, os.Stdout, color, stdoutIsTerminal()); err != nil {
+		fmt.Fprintln(os.Stderr, "logc watch:", err)
+		return 1
+	}
 	return 0
 }
 
@@ -624,12 +649,15 @@ func runJournalAlertWatch(ctx context.Context, unit string, cfg Config, query Qu
 }
 
 func runJournalAlertCommand(ctx context.Context, command *exec.Cmd, source string, cfg Config, query Query, out io.Writer, color, clear, fullLines bool) error {
+	scanCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	pipe, err := command.StdoutPipe()
 	if err != nil {
 		return err
 	}
 	command.Stderr = os.Stderr
 	if err := command.Start(); err != nil {
+		_ = pipe.Close()
 		return err
 	}
 
@@ -638,16 +666,29 @@ func runJournalAlertCommand(ctx context.Context, command *exec.Cmd, source strin
 	watcher.states[source] = &fileState{Path: source}
 	lines := make(chan string, 1024)
 	done := make(chan error, 1)
-	go scanCommandLines(ctx, pipe, command, lines, done)
+	go scanCommandLines(scanCtx, pipe, command, lines, done)
+	defer func() {
+		cancel()
+		stopLogCommand(command, pipe)
+		if done != nil {
+			<-done
+		}
+	}()
 	renderTicker := time.NewTicker(time.Second)
 	defer renderTicker.Stop()
-	watcher.render(out, color, clear)
+	if err := watcher.render(out, color, clear); err != nil {
+		return err
+	}
 	for {
 		select {
 		case <-ctx.Done():
+			cancel()
 			stopLogCommand(command, pipe)
 			<-done
-			watcher.render(out, color, clear)
+			done = nil
+			if err := watcher.render(out, color, clear); err != nil {
+				return err
+			}
 			return ctx.Err()
 		case line, ok := <-lines:
 			if !ok {
@@ -657,19 +698,24 @@ func runJournalAlertCommand(ctx context.Context, command *exec.Cmd, source strin
 			observedAt := time.Now()
 			watcher.observe(source, []string{line}, observedAt, observedAt)
 		case runErr := <-done:
+			done = nil
 			if lines != nil {
 				for line := range lines {
 					observedAt := time.Now()
 					watcher.observe(source, []string{line}, observedAt, observedAt)
 				}
 			}
-			watcher.render(out, color, clear)
+			if err := watcher.render(out, color, clear); err != nil {
+				return err
+			}
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 			return runErr
 		case <-renderTicker.C:
-			watcher.render(out, color, clear)
+			if err := watcher.render(out, color, clear); err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -677,15 +723,13 @@ func runJournalAlertCommand(ctx context.Context, command *exec.Cmd, source strin
 func scanCommandLines(ctx context.Context, reader io.Reader, command *exec.Cmd, lines chan<- string, done chan<- error) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 64*1024), maxCarryBytes)
+scan:
 	for scanner.Scan() {
 		select {
 		case lines <- strings.TrimSuffix(scanner.Text(), "\r"):
 		case <-ctx.Done():
 			stopLogCommand(command, reader)
-			_ = command.Wait()
-			close(lines)
-			done <- ctx.Err()
-			return
+			break scan
 		}
 	}
 	close(lines)

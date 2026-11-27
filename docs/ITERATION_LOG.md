@@ -1240,3 +1240,70 @@ https://github.com/debugc-clis/logc/actions/runs/45971373762.
 This documentation-only follow-up records the confirmed remote result. The
 landing-page source is pushed; the existing TLS mismatch still prevents
 confirming a live deployment.
+
+## 2026-11-27 — Follow-up: stop watch after dashboard write failure
+
+### User request, PM scope and reproduction
+
+The owner requested continued implementation and push. The clean checkout was
+at `1124c12`, matched origin/main, and both preceding CI runs passed. Coordinator
+reproduced file watch ignoring read-only stdout: it remained alive after 1.2
+seconds and exited 0 only after SIGTERM, with no output diagnostic. The PM chose
+watch dashboard rendering and its shared journal-alert loop, not ordinary
+Docker/journal streaming. Staff engineering and independent QA used disjoint
+scopes in an isolated clone under an exclusive lock.
+
+### Implemented contract and limits
+
+- Return a typed dashboard-write error preserving its cause/short-write status.
+  Initial, periodic and final-view failures stop monitoring without a retry or
+  another final redraw. An observed write error wins over cancellation or
+  helper completion; healthy cancellation keeps the existing final view.
+- File watch closes retained logs and stops tickers. Journal-alert watch cancels
+  scanner delivery, closes the pipe, stops only the owned local reader helper
+  and reaps it with one Wait owner, including silent/backpressured helpers.
+  Monitored services are not stopped.
+- Do not alter flags, log contents, ordinary Docker/journal stream output or
+  OS SIGPIPE handling. Already-blocked writes cannot be interrupted; the last
+  view can be partial. README and the landing watch card state the scope and
+  Homebrew remains explicitly under construction.
+
+### Validation and publication
+
+Implementation and final review/check evidence is recorded below after
+completion. Static HTML checks passed anchors, project links, Homebrew notice
+and watch-scope wording. Browser launch remained blocked by the occupied
+DevTools profile; no user browser was terminated. Desktop/mobile/light/dark
+visual verification is not claimed. Only prose changed; the temporary server
+stopped. `https://logc.com/` still fails certificate hostname verification
+(curl 60), and no TLS bypass or infrastructure changes were attempted.
+Source push, CI and live deployment remain separate outcomes.
+
+Engineering retained initial/periodic/final/short-write tests, cancellation and
+helper-EOF precedence, descriptor cleanup, silent/flooding/exited child readers,
+single-owner reaping and a directly saturated scanner-channel cancellation test.
+Healthy CLI cancellation uses a dashboard-readiness handshake rather than a
+startup sleep. Watch rotation, truncation, discovery and large-line regressions
+are included. No source services were contacted or modified.
+
+Coordinator final uncached targeted race tests passed in 12.446 seconds, then
+the full race suite in 34.764 seconds; normal vet, unique-path build, formatting
+and diff checks passed on macOS arm64/Go 1.22.2. The actual read-only-stdout
+reproduction now exits 1 promptly with a dashboard-output diagnostic instead of
+requiring SIGTERM. Independent review and publication results follow below.
+
+Independent QA passed actual repository tests and separate lifecycle probes,
+confirming silent/helper/channel cleanup, healthy EOF/cancellation, SIGPIPE and
+input-error compatibility. It identified a periodic-test false positive: final
+render after a context deadline could masquerade as a periodic failure. The
+coordinator added a retained assertion that periodic failure occurs before
+cancellation. QA reran both cases successfully, then disabled periodic rendering
+in an external mutation overlay and confirmed both now fail. The implementation
+was unchanged; this strengthened the regression test rather than hiding a bug.
+Final coordinator uncached targeted race tests passed in 9.556 seconds, full
+race tests in 34.401 seconds, followed by vet, unique-path build, formatting
+and diff checks. These are local macOS/Go 1.22.2 results, not yet Linux CI.
+
+Next priorities: scope ordinary container/system reader output failures, then
+installation/distribution verification. Do not describe dashboard protection
+as complete external-stream output lifecycle coverage.
