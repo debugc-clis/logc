@@ -1232,3 +1232,11 @@ from remote Linux CI; origin/main was fetched unchanged before publication.
 Next priorities: independently scope output failure handling for watch or
 external readers, and validate installation/distribution. Preserve separate
 guarantees for files and service/container subprocesses until each is tested.
+
+Implementation `7e06198` was normally pushed to origin/main and the original
+clean main checkout fast-forwarded. All four Ubuntu/macOS Intel and Go
+1.22/stable CI jobs passed race tests, vet and builds:
+https://github.com/debugc-clis/logc/actions/runs/45971373762.
+This documentation-only follow-up records the confirmed remote result. The
+landing-page source is pushed; the existing TLS mismatch still prevents
+confirming a live deployment.
