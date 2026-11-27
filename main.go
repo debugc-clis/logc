@@ -390,13 +390,19 @@ func realMain() int {
 		defer stop()
 		f := newSearchFollower(cfg, resolved, activePaths, excludes, out, q)
 		f.categories, f.modules = opts.Categories, opts.Modules
-		f.run(ctx)
+		if err := f.run(ctx); err != nil {
+			out.errorf("%v", err)
+			return 1
+		}
 		return 0
 	}
 
 	follow := shouldFollow(opts)
 	if !follow {
-		showSnapshot(paths, cfg.Lines, q, out)
+		if err := showSnapshot(paths, cfg.Lines, q, out); err != nil {
+			out.errorf("%v", err)
+			return 1
+		}
 		return 0
 	}
 
@@ -409,7 +415,10 @@ func realMain() int {
 	f := newFollower(cfg, patterns, excludes, out, q, false)
 	f.defaultDiscovery = resolved.DefaultDiscovery
 	f.categories, f.modules = opts.Categories, opts.Modules
-	f.run(ctx)
+	if err := f.run(ctx); err != nil {
+		out.errorf("%v", err)
+		return 1
+	}
 	return 0
 }
 
@@ -645,11 +654,15 @@ func systemCommand(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	err = runSystemLogsFiltered(ctx, cfg, lines, kernel, query, out)
-	if err != nil && ctx.Err() == nil {
+	if systemCommandFailed(ctx, err) {
 		fmt.Fprintln(os.Stderr, "logc system:", err)
 		return 1
 	}
 	return 0
+}
+
+func systemCommandFailed(ctx context.Context, err error) bool {
+	return err != nil && (isFileOutputError(err) || isSearchOutputError(err) || ctx.Err() == nil)
 }
 
 func listCommand(args []string) int {

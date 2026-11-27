@@ -122,11 +122,15 @@ func runSystemFileLogs(ctx context.Context, cfg Config, activePaths []string, li
 				return err
 			}
 		} else {
-			showSnapshot(paths, lines, query, out)
+			if err := showSnapshot(paths, lines, query, out); err != nil {
+				return err
+			}
 		}
 	} else {
 		sort.Strings(activePaths)
-		showSnapshot(activePaths, lines, query, out)
+		if err := showSnapshot(activePaths, lines, query, out); err != nil {
+			return err
+		}
 	}
 
 	followQuery := query
@@ -134,8 +138,7 @@ func runSystemFileLogs(ctx context.Context, cfg Config, activePaths []string, li
 	followerConfig := cfg
 	followerConfig.Lines = lines
 	f := newFollower(followerConfig, cfg.SystemLogPaths, nil, out, followQuery, true)
-	f.run(ctx)
-	return nil
+	return f.run(ctx)
 }
 
 func unitCommand(ctx context.Context, unit string, lines int, follow bool, q Query) (*exec.Cmd, error) {

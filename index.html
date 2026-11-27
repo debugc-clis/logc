@@ -567,7 +567,7 @@ $ tail -f app.log | grep ERROR</pre>
           </article>
           <article class="card feature">
             <div class="icon"><svg viewBox="0 0 24 24"><path d="M2 13h4l2-7 4 13 3-9 2 3h5"/></svg></div>
-            <div><h3>Follow live</h3><p>Search history, then continue following new matching lines.</p></div>
+            <div><h3>Follow live</h3><p>Search history, then follow new matching lines. File-backed followers stop on detected stdout write errors instead of continuing invisibly.</p></div>
           </article>
           <article class="card feature">
             <div class="icon"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="5" rx="1"/><rect x="4" y="10" width="16" height="5" rx="1"/><rect x="4" y="17" width="16" height="4" rx="1"/><path d="M7 5.5h.01M7 12.5h.01M7 19h.01"/></svg></div>
@@ -610,7 +610,7 @@ $ tail -f app.log | grep ERROR</pre>
 
           <article class="card example-card">
             <div class="example-label"><span class="badge">02</span><span><span class="example-syntax">logc TARGET</span> — follow one source</span></div>
-            <p class="example-when">Use a source name when you know the service but do not want to remember its exact file paths.</p>
+            <p class="example-when">Use a source name when you know the service but do not want to remember its exact file paths. File-backed followers exit 1 and close retained files on detected stdout write errors, including final-flush errors during cancellation. Healthy cancellation still exits normally; blocked writes cannot be interrupted by this check.</p>
             <div class="mini-terminal">
 <pre><span class="prompt">$</span> logc api
 

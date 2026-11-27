@@ -195,7 +195,11 @@ func TestFilteredDefaultFollowWatchRescan(t *testing.T) {
 					}
 				}()
 				states := follower.states
-				rescan := follower.rescan
+				rescan := func() {
+					if err := follower.rescan(); err != nil {
+						t.Fatal(err)
+					}
+				}
 				if mode == "watch" {
 					states = watcher.states
 					rescan = func() { watcher.rescan(false) }
@@ -291,7 +295,11 @@ func TestFilteredQuietRetentionBeforeBudget(t *testing.T) {
 				}()
 				states := follower.states
 				add := func(path string) { follower.addPath(path, false) }
-				rescan := follower.rescan
+				rescan := func() {
+					if err := follower.rescan(); err != nil {
+						t.Fatal(err)
+					}
+				}
 				if mode == "watch" {
 					states = watcher.states
 					add = func(path string) { watcher.addPath(path, false) }

@@ -1165,3 +1165,70 @@ https://github.com/debugc-clis/logc/actions/runs/45646036148.
 This documentation-only follow-up records the confirmed result, including
 Linux FIFO/pipe regressions. Landing-page source is pushed; the existing TLS
 mismatch still prevents confirming live deployment.
+
+## 2026-11-27 — Stop file followers after detected output failure
+
+### PM scenario and reproduction
+
+A file follower loses its output destination but continues polling and holding
+files. Coordinator reproduced the baseline with a read-only stdout descriptor
+and isolated temporary logs: text and JSON followers both stayed alive after
+0.7 seconds, then returned 0 on SIGTERM without an output diagnostic. The PM
+selected file-backed follower lifecycle handling, following the previous finite
+search fix, rather than expanding into all external readers and dashboards.
+
+Main was clean at `6a03344`, matched origin/main, and both prior CI runs passed.
+Homebrew issue #2 remains open and no open PRs were listed. Separate PM, Staff
+Go engineering and independent QA roles used disjoint scopes in an isolated
+clone under an exclusive iteration lock.
+
+### Implemented behavior and boundaries
+
+- Propagate initial/new-file/live/final-flush output errors through the file
+  follower, stop subsequent output and polling/rescans, close retained source
+  descriptors and exit 1. Preserve the underlying cause and source identity.
+  Existing input/discovery failures remain report-and-continue behavior.
+- Normal cancellation still performs the existing final flush and succeeds
+  when that write succeeds. Detected write failure wins over cancellation,
+  including shutdown dedup-summary output, without a second retry/flush.
+- Cover default/targeted followers, search-follow's live file phase and
+  traditional system-file fallback snapshots/follow. Watch, Docker, journald
+  and other command output lifecycles remain separate work. Preserve OS SIGPIPE;
+  do not promise interruption of a blocked write, atomic exports or durability.
+- README and landing-page follow descriptions explain this scope and README
+  adds a file-backed JSON follow example. No new flags, dependencies, log writes
+  or production infrastructure changes; Homebrew stays under construction.
+
+### Evidence and publication
+
+Engineering, independent review and final validation results are recorded
+below after completion. Static HTML checks passed internal anchors, repository
+links, Homebrew notice and cancellation/follow wording. Browser launch was
+blocked by an existing occupied DevTools profile; no user browser was stopped
+or profile changed. Desktop/mobile and light/dark visual checks are not claimed.
+Only page prose changed; the owned local server stopped. The existing
+`https://logc.com/` certificate hostname mismatch persists (curl 60), so source
+publication is not confirmation of a live deployment. No TLS bypass occurred.
+
+Engineering retained text/JSON and short-write tests for initial/new/live/final
+dedup blocks, cancellation/error precedence, system-file snapshot/history/live,
+descriptor bounds/cleanup, healthy cancellation and SIGPIPE. Coordinator review
+replaced sleep-based CLI assumptions with bounded readiness handshakes; live
+search-follow tests now require the live diagnostic rather than accidentally
+passing from a historical write failure. Two existing discovery-test callbacks
+were adapted to the new error-returning rescan and assert healthy completion.
+
+Independent QA validated the actual integrated repository without an overlay
+or excluded tests, plus separate temporary race probes. It confirmed no later
+source output/opening after failure, cause preservation and cleanup of 256
+retained descriptors among 270 states. Its full race suite passed in 26.186
+seconds, with vet/build/format/diff checks also passing and no blocking findings.
+Coordinator final uncached targeted tests passed in 5.436 seconds, then full
+race tests in 26.192 seconds, vet, unique-path build, formatting and diff checks
+passed on macOS arm64/Go 1.22.2. Four isolated CLI smokes covered initial and
+search-follow live output failure in text/JSON. These local results are distinct
+from remote Linux CI; origin/main was fetched unchanged before publication.
+
+Next priorities: independently scope output failure handling for watch or
+external readers, and validate installation/distribution. Preserve separate
+guarantees for files and service/container subprocesses until each is tested.

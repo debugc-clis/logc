@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,22 @@ const (
 type streamLine struct {
 	Seq  int64
 	Text string
+}
+
+type fileOutputError struct {
+	Path string
+	Err  error
+}
+
+func (err *fileOutputError) Error() string {
+	return fmt.Sprintf("failed to write logs from %s: %v", err.Path, err.Err)
+}
+
+func (err *fileOutputError) Unwrap() error { return err.Err }
+
+func isFileOutputError(err error) bool {
+	var outputErr *fileOutputError
+	return errors.As(err, &outputErr)
 }
 
 type fileState struct {
@@ -216,7 +233,7 @@ func openFileState(path string, lines int, keepOpen bool) ([]string, *fileState,
 	return initial, &fileState{Path: path, File: file, Info: info, Offset: offset}, nil
 }
 
-func showSnapshot(paths []string, lines int, q Query, out *printer) {
+func showSnapshot(paths []string, lines int, q Query, out *printer) error {
 	for _, p := range paths {
 		var ls []string
 		var info os.FileInfo
@@ -241,9 +258,12 @@ func showSnapshot(paths []string, lines int, q Query, out *printer) {
 			filtered = dedupLines(filtered)
 		}
 		if len(filtered) > 0 || q.Regex == nil {
-			out.block(p, filtered, "")
+			if err := out.block(p, filtered, ""); err != nil {
+				return &fileOutputError{Path: p, Err: err}
+			}
 		}
 	}
+	return nil
 }
 
 func (f *follower) initialFiltered(lines []string, info os.FileInfo) []string {
@@ -256,11 +276,11 @@ func (f *follower) initialFiltered(lines []string, info os.FileInfo) []string {
 	return out
 }
 
-func (f *follower) addPath(path string, announce bool) {
+func (f *follower) addPath(path string, announce bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, ok := f.states[path]; ok {
-		return
+		return nil
 	}
 	openFiles := 0
 	for _, state := range f.states {
@@ -271,19 +291,22 @@ func (f *follower) addPath(path string, announce bool) {
 	lines, state, err := openFileState(path, f.cfg.Lines, openFiles < maxOpenFollowFiles)
 	if err != nil {
 		f.reportFailure(path, err)
-		return
+		return nil
 	}
 	f.clearFailure(path)
 	f.states[path] = state
 	if f.skipInitial {
-		return
+		return nil
 	}
 	lines = f.initialFiltered(lines, state.Info)
+	suffix := ""
 	if announce {
-		f.out.block(path, lines, "new file")
-	} else {
-		f.out.block(path, lines, "")
+		suffix = "new file"
 	}
+	if err := f.out.block(path, lines, suffix); err != nil {
+		return &fileOutputError{Path: path, Err: err}
+	}
+	return nil
 }
 
 func retainExistingPaths(paths []string, states map[string]*fileState, cfg Config, filters ...sourceFilter) []string {
@@ -323,11 +346,11 @@ func retainExistingPaths(paths []string, states map[string]*fileState, cfg Confi
 	return paths
 }
 
-func (f *follower) rescan() {
+func (f *follower) rescan() error {
 	paths, warnings, err := f.resolvePaths()
 	if err != nil {
 		f.reportFailure("log source scan", err)
-		return
+		return nil
 	}
 	for _, warning := range warnings {
 		f.reportWarning(warning)
@@ -337,7 +360,9 @@ func (f *follower) rescan() {
 		paths = retainExistingPaths(paths, f.states, f.cfg, sourceFilter{categories: f.categories, modules: f.modules})
 	}
 	for _, p := range paths {
-		f.addPath(p, true)
+		if err := f.addPath(p, true); err != nil {
+			return err
+		}
 	}
 	active := make(map[string]bool, len(paths))
 	for _, p := range paths {
@@ -351,6 +376,7 @@ func (f *follower) rescan() {
 		}
 	}
 	pruneFailureCache(f.failures, active, warnings)
+	return nil
 }
 
 func (f *follower) resolvePaths() ([]string, []string, error) {
@@ -608,7 +634,7 @@ func (f *follower) poll() {
 	}
 }
 
-func (f *follower) flushFair() {
+func (f *follower) flushFair() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.query.Dedup {
@@ -641,15 +667,20 @@ func (f *follower) flushFair() {
 		if len(st.Pending) > 0 {
 			suffix = fmt.Sprintf("%d buffered", len(st.Pending))
 		}
-		f.out.block(p, batch, suffix)
+		if err := f.out.block(p, batch, suffix); err != nil {
+			return &fileOutputError{Path: p, Err: err}
+		}
 	}
+	return nil
 }
 
-func (f *follower) run(ctx context.Context) {
+func (f *follower) run(ctx context.Context) error {
 	defer f.closeStates()
 	if paths, _, err := f.resolvePaths(); err == nil {
 		for _, p := range paths {
-			f.addPath(p, false)
+			if err := f.addPath(p, false); err != nil {
+				return err
+			}
 		}
 	}
 	pollInterval := 250 * time.Millisecond
@@ -667,14 +698,17 @@ func (f *follower) run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			f.flushFair()
-			return
+			return f.flushFair()
 		case <-pollTicker.C:
 			f.poll()
 		case <-flushTicker.C:
-			f.flushFair()
+			if err := f.flushFair(); err != nil {
+				return err
+			}
 		case <-scanTicker.C:
-			f.rescan()
+			if err := f.rescan(); err != nil {
+				return err
+			}
 		}
 	}
 }

@@ -125,6 +125,7 @@ that name, use `logc ./completion` or `logc -- completion` instead.
 
 ## Recent Improvements
 
+- **File followers stop on output failure:** default/targeted file follow, the live phase of search-follow and traditional system-file fallback now exit 1 on a detected stdout write error and close retained files, rather than continuing invisibly. Healthy cancellation still exits normally.
 - **Search exports fail visibly:** detected stdout write failures abort file/gzip searches with exit code 1 instead of reporting success. The failed search does not proceed into follow; partial output must not be treated as a complete export.
 - **Configuration section mistakes fail early:** unknown nonempty headers such as `[grop.api]` now report the configuration path and line instead of silently treating following settings as global. Use `[group.api]` for a source, not `[api]`.
 - **Empty time windows fail early:** an explicit `--since ''` returns exit code 2 instead of silently behaving as if the option were omitted. This also catches empty shell variables in file, watch and system commands; Docker keeps its native argument handling.
@@ -314,11 +315,20 @@ treating the destination as complete:
 logc /srv/api/app.log -m ERROR --since 30m --json > incident.jsonl
 ```
 
-This protection covers file-search result blocks, including `logc system`'s
-traditional-file historical search with `--since` or `--all` (not journald).
-It is not a guarantee for ordinary live tail/follow,
-watch, journald, Docker or every other command's output. It also does not make
-exports atomic or guarantee data has reached durable storage.
+This protection also covers file-backed followers: their initial tails, newly
+discovered-file blocks, live batches and cancellation-time flushes. A detected
+write error stops polling/rescanning, closes retained files and exits **1**,
+including when the write fails during cancellation. A healthy cancellation
+keeps the existing final-flush behavior and exits normally. For example:
+
+```bash
+logc /srv/api/log --json > live.jsonl
+```
+
+Coverage includes the live phase after a successful file search with `-f` and
+`logc system`'s traditional-file fallback, not journald. It is not a guarantee
+for watch, Docker or every other command's output. It cannot interrupt a write
+that is already blocked, make exports atomic, or guarantee durable storage.
 
 ### 3. Search, then follow
 
